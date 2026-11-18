@@ -75,6 +75,8 @@ try { $c->download('http://s3.example.test/x', '/tmp/x'); check('non-https attac
 // ---- adapter: users (agents then requesters), groups, categories
 $calls = [];
 $routes = [
+    '/api/v2/groups/302'        => ['status' => 200, 'body' => fx('group_302')],
+    '/api/v2/groups'            => ['status' => 200, 'body' => fx('groups')],
     '/api/v2/agents'            => ['status' => 200, 'body' => fx('agents')],
     '/api/v2/requesters'        => ['status' => 200, 'body' => fx('requesters')],
     '/api/v2/ticket_form_fields' => ['status' => 200, 'body' => fx('ticket_form_fields')],
@@ -95,6 +97,15 @@ $cat = $ad->fetchPage('categories', 1, null);
 $paths = array_map(fn ($c) => implode(' > ', $c->path), $cat->items);
 check('categories: every node of the tree is a path', $paths === ['Hardware', 'Hardware > Laptop', 'Hardware > Desktop', 'Software', 'Network'], json_encode($paths));
 check('categories: only one page', !$cat->hasMore && $ad->fetchPage('categories', 2, null)->items === []);
+
+// ---- groups and their members
+$calls = [];
+$gp = $ad->fetchPage('groups', 1, null);
+check('groups: two groups', count($gp->items) === 2 && $gp->items[0]->name === 'Service Desk' && !$gp->hasMore);
+check('groups: members from the list answer, as agent:<id>', $gp->items[0]->memberSrcIds === ['agent:201', 'agent:202']);
+check('groups: a group without members in the list is fetched once; junk ids dropped', $gp->items[1]->memberSrcIds === ['agent:201', 'agent:203'], json_encode($gp->items[1]->memberSrcIds));
+check('groups: exactly one extra request, for the group that needed it', count(array_filter($calls, fn ($c) => str_contains($c['url'], '/groups/302'))) === 1 && count(array_filter($calls, fn ($c) => str_contains($c['url'], '/groups/301'))) === 0);
+check('memberRefs: objects with an id accepted, duplicates dropped', A::memberRefs(['members' => [['id' => 5], ['id' => '5'], 6]]) === ['agent:5', 'agent:6'] && A::memberRefs([]) === []);
 
 // ---- tickets
 $calls = [];

@@ -14,6 +14,21 @@ $_SESSION['glpiactiveentities'] = [0]; $_SESSION['glpiactive_entity'] = 0;
 
 use GlpiPlugin\Itsmmigrator\{MapRepository, Source, Verifier};
 
+
+/**
+ * A test source, inserted directly: the staging GLPI may hold a REAL source (Source::add allows one active source per
+ * adapter), and these tools must never touch it. Everything they delete is scoped to this id.
+ */
+function mkTestSource(string $name, int $entity, string $apiKey, ?string $options = null): int
+{
+    global $DB;
+    $now = date('Y-m-d H:i:s');
+    $DB->insert('glpi_plugin_itsmmigrator_sources', [
+        'name' => $name, 'adapter' => 'freshservice', 'base_url' => 'https://fs.example.test', 'api_key' => (new GLPIKey())->encrypt($apiKey),
+        'entities_id' => $entity, 'options' => $options, 'schedule' => 'manual', 'is_active' => 1, 'date_creation' => $now, 'date_mod' => $now,
+    ]);
+    return (int) $DB->insertId();
+}
 $pass = 0; $fail = 0;
 function chk(string $l, bool $ok, string $d = ''): void { global $pass, $fail; if ($ok) { $pass++; echo "PASS $l\n"; } else { $fail++; echo "FAIL $l $d\n"; } }
 $count = fn (string $t, array $w = []) => countElementsInTable($t, $w);
@@ -30,8 +45,7 @@ foreach ([$target, $other] as $c) { $DB->update('glpi_entities', ['entities_id' 
 $GLPI_CACHE->clear();
 $_SESSION['glpiactiveentities'] = [0, $parent, $target, $other];
 
-$src = new Source();
-$sid = $src->add(['name' => "$tag-src", 'adapter' => 'freshservice', 'base_url' => 'https://fs.example.test', 'entities_id' => $target, 'api_key' => 'k']);
+$sid = mkTestSource("$tag-src", $target, 'k');
 
 $mk = function (string $type, string $id, string $itemtype, int $items, string $action = 'created', string $status = 'ok', array $extra = []) use ($sid) {
     $r = MapRepository::begin($sid, 'freshservice', $type, $id, $itemtype, $items, $action, $extra);

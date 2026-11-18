@@ -17,6 +17,21 @@ use GlpiPlugin\Itsmmigrator\Adapter\Dto\{ExternalCategory, ExternalGroup, Extern
 use GlpiPlugin\Itsmmigrator\Adapter\SourceAdapterInterface;
 use GlpiPlugin\Itsmmigrator\{Engine, Lock, LockException, MapRepository, Source};
 
+
+/**
+ * A test source, inserted directly: the staging GLPI may hold a REAL source (Source::add allows one active source per
+ * adapter), and these tools must never touch it. Everything they delete is scoped to this id.
+ */
+function mkTestSource(string $name, int $entity, string $apiKey, ?string $options = null): int
+{
+    global $DB;
+    $now = date('Y-m-d H:i:s');
+    $DB->insert('glpi_plugin_itsmmigrator_sources', [
+        'name' => $name, 'adapter' => 'freshservice', 'base_url' => 'https://fs.example.test', 'api_key' => (new GLPIKey())->encrypt($apiKey),
+        'entities_id' => $entity, 'options' => $options, 'schedule' => 'manual', 'is_active' => 1, 'date_creation' => $now, 'date_mod' => $now,
+    ]);
+    return (int) $DB->insertId();
+}
 $pass = 0; $fail = 0;
 function chk(string $l, bool $ok, string $d = ''): void { global $pass, $fail; if ($ok) { $pass++; echo "PASS $l\n"; } else { $fail++; echo "FAIL $l $d\n"; } }
 
@@ -59,9 +74,8 @@ foreach ([$ann, $d1, $d2, $lg, $inactive] as $id) { $cleanup[] = ['User', $id]; 
 $annBefore = (new User()); $annBefore->getFromDB($ann); $annBefore = $annBefore->fields;
 
 // Source row
-$src = new Source();
-$sid = $src->add(['name' => "$tag-src", 'adapter' => 'freshservice', 'base_url' => 'https://fs.example.test', 'entities_id' => $target,
-    'api_key' => 'k', 'options' => json_encode(['email_aliases' => [['old.example.test', 'new.example.test']]])]);
+$sid = mkTestSource("$tag-src", $target, 'k', json_encode(['email_aliases' => [['old.example.test', 'new.example.test']]]));
+$src = new Source(); $src->getFromDB($sid);
 chk('source created', (int) $sid > 0);
 $source = $src->fields; $source['id'] = $sid;
 $srcAdapter = 'freshservice';
@@ -89,7 +103,7 @@ $users = [
 $groups = [
     new ExternalGroup('freshservice', 'g1', "$tag itoc", ['u1']),                                       // matches parent recursive group
     new ExternalGroup('freshservice', 'g2', "$tag OnlyParent"),                                         // parent non-recursive -> created in target
-    new ExternalGroup('freshservice', 'g3', "$tag Brand New"),                                          // created
+    new ExternalGroup('freshservice', 'g3', "$tag Brand New", ['u1', 'u6', 'u3', 'nobody']),            // created, with members: only the mapped user is added
 ];
 $cats = [
     new ExternalCategory('freshservice', 'c1', ["$tag-Hardware"]),                                      // matches parent recursive
@@ -171,14 +185,14 @@ chk('second run: no new group / category', countElementsInTable('glpi_groups') =
 chk('second run: everything skipped', array_sum(array_map(fn ($k) => ($res['counters'][$k]['created'] ?? 0) + ($res['counters'][$k]['matched'] ?? 0), ['users', 'groups', 'categories'])) === 0, json_encode($res['counters']));
 
 // ---- resume: an in_progress row with items_id reuses the item, never adds a new one
-$DB->update('glpi_plugin_itsmmigrator_maps', ['status' => 'in_progress'], ['source' => 'freshservice', 'src_type' => 'group', 'src_id' => 'g3']);
+$DB->update('glpi_plugin_itsmmigrator_maps', ['status' => 'in_progress'], ['sources_id' => $sid, 'source' => 'freshservice', 'src_type' => 'group', 'src_id' => 'g3']);
 $grp = countElementsInTable('glpi_groups');
 $res = (new Engine($adapter))->run($source, 'cli', ['groups'], [], $logger);
 chk('resume: no duplicate group', countElementsInTable('glpi_groups') === $grp);
 chk('resume: row back to ok', (MapRepository::find('freshservice', 'group', 'g3')['status'] ?? '') === 'ok');
 
 // ---- failed row: skipped by default, retried with the flag
-$DB->update('glpi_plugin_itsmmigrator_maps', ['status' => 'failed', 'error' => 'x'], ['source' => 'freshservice', 'src_type' => 'group', 'src_id' => 'g3']);
+$DB->update('glpi_plugin_itsmmigrator_maps', ['status' => 'failed', 'error' => 'x'], ['sources_id' => $sid, 'source' => 'freshservice', 'src_type' => 'group', 'src_id' => 'g3']);
 (new Engine($adapter))->run($source, 'cli', ['groups'], [], $logger);
 chk('failed row skipped without --retry-failed', (MapRepository::find('freshservice', 'group', 'g3')['status'] ?? '') === 'failed');
 (new Engine($adapter))->run($source, 'cli', ['groups'], ['retry_failed' => true], $logger);
@@ -204,6 +218,19 @@ Lock::release($rid2, 'success');
 $st = $DB->request(['SELECT' => ['status', 'counters'], 'FROM' => 'glpi_plugin_itsmmigrator_runs', 'ORDER' => 'id DESC', 'LIMIT' => 1])->current();
 chk('no run left in running state', countElementsInTable('glpi_plugin_itsmmigrator_runs', ['status' => 'running']) === 0);
 
+// ---- group members (Group_User only for mapped users, never twice, parent's groups only when the option is on)
+$g3row = MapRepository::find('freshservice', 'group', 'g3');
+$g3 = (int) $g3row['items_id'];
+chk('members: a created group gets the MAPPED user only', countElementsInTable('glpi_groups_users', ['groups_id' => $g3]) === 1 && countElementsInTable('glpi_groups_users', ['groups_id' => $g3, 'users_id' => $ann]) === 1, (string) countElementsInTable('glpi_groups_users', ['groups_id' => $g3]));
+chk('members: skipped, needs_review and unknown users are never added', countElementsInTable('glpi_groups_users', ['groups_id' => $g3, ['NOT' => ['users_id' => $ann]]]) === 0);
+$DB->update('glpi_plugin_itsmmigrator_maps', ['status' => 'in_progress'], ['sources_id' => $sid, 'source' => 'freshservice', 'src_type' => 'group', 'src_id' => 'g3']);
+(new Engine($adapter, null))->run($source, 'cli', ['groups'], [], $logger);
+chk('members: a re-run does not add the member twice', countElementsInTable('glpi_groups_users', ['groups_id' => $g3]) === 1);
+$srcOpt = $source; $srcOpt['options'] = json_encode(['add_members_to_matched_groups' => true]);
+$adapterM = new FakeAdapter(['groups' => [[new ExternalGroup('freshservice', 'g5', "$tag itoc", ['u1'])]]]);
+(new Engine($adapterM))->run($srcOpt, 'cli', ['groups'], [], $logger);
+chk('members: add_members_to_matched_groups ON adds the member to the parent\'s group', countElementsInTable('glpi_groups_users', ['groups_id' => $itoc, 'users_id' => $ann]) === 1);
+chk('members: that group was matched, not created', MapRepository::find('freshservice', 'group', 'g5')['action'] === 'matched');
 // ---- create-missing-users + leak guard
 $adapter2 = new FakeAdapter(['users' => [[new ExternalUser('freshservice', 'u9', 'Newbie', ["$tag.newbie@example.test"], "$tag.newbie")]]]);
 $res = (new Engine($adapter2))->run($source, 'cli', ['users'], ['create_missing_users' => true], $logger);

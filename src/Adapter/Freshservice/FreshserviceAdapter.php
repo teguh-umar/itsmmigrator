@@ -141,13 +141,48 @@ final class FreshserviceAdapter implements SourceAdapterInterface
         $rows = $r['json']['groups'] ?? [];
         $out  = [];
         foreach ($rows as $g) {
-            // Membership is not read: the v2 group list does not reliably carry it (unverified), and
-            // adding members is optional in this build.
-            $out[] = new ExternalGroup(self::SOURCE, (string) $g['id'], (string) $g['name'], [], self::date($g['updated_at'] ?? null));
+            $out[] = new ExternalGroup(self::SOURCE, (string) $g['id'], (string) $g['name'], $this->members($g), self::date($g['updated_at'] ?? null));
         }
         return new Page($out, $r['link_next'] || count($rows) >= FreshserviceClient::PER_PAGE);
     }
 
+    /**
+     * The group's members as `agent:<id>` references (only agents are group members in Freshservice).
+     * The list answer is used when it carries them; otherwise the group is fetched once. UNVERIFIED:
+     * the key is `agent_ids` in the v2 docs this was written from, `members` is accepted as well.
+     *
+     * @param array<string,mixed> $g a row of /groups
+     * @return list<string>
+     */
+    private function members(array $g): array
+    {
+        if (!array_key_exists('agent_ids', $g) && !array_key_exists('members', $g)) {
+            $g = $this->client->get('/groups/' . rawurlencode((string) $g['id']))['json']['group'] ?? $g;
+        }
+        return self::memberRefs($g);
+    }
+
+    /**
+     * Pure: member references out of a group object. Accepts a list of ids or a list of objects with an id.
+     *
+     * @param array<string,mixed> $g
+     * @return list<string>
+     */
+    public static function memberRefs(array $g): array
+    {
+        $raw = $g['agent_ids'] ?? $g['members'] ?? [];
+        $out = [];
+        foreach ((array) $raw as $m) {
+            $id = is_array($m) ? ($m['id'] ?? null) : $m;
+            if ((is_int($id) || (is_string($id) && ctype_digit($id))) && (int) $id > 0) {
+                $ref = 'agent:' . (int) $id;
+                if (!in_array($ref, $out, true)) {
+                    $out[] = $ref;
+                }
+            }
+        }
+        return $out;
+    }
     // ----------------------------------------------------------- categories
 
     private function categoriesPage(int $page): Page
