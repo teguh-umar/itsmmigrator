@@ -1,4 +1,8 @@
 # Changelog
+## 0.1.0-rc9
+
+- **Category picker on the source form.** On a saved source, "Show the categories of this source" lists the source's category tree (one read-only GET of the form listing: paths only, no ticket, no user, no counts), with a filter box; clicking a path adds it to "Import only these ticket categories". The list goes to the logged-in administrator's page and nowhere else: `ajax/categories.php` is POST only, needs the config right with Update (it uses the stored key), is CSRF-checked by GLPI on the header, discards anything printed, writes nothing and logs nothing. Checked over HTTP on staging 2 against the real source: 442 paths, 3 levels, 3 s, nothing written, no key in any answer; GET 405, no CSRF header 403.
+
 ## 0.1.0-rc8
 
 - **Import only chosen ticket categories (early-phase scope).** The source form has a box "Import only these ticket categories" (one path per line, `Hardware` or `Hardware > Laptop`, case and spacing ignored, a path includes everything below it), stored in the source options as `ticket_categories`; `plugins:itsmmigrator:run --category="..."` (repeatable) overrides it for one run. A ticket outside the list is skipped **before any map lookup or write**: no map row, no GLPI ticket, so widening the list later imports it. A ticket with no category is left out while a filter is on. The category module creates only the chosen branches and their parents. **A filtered run never moves the watermark** (it has not seen every ticket). Tested offline (21 checks) and on staging 2 (flag, source option, widening, category tree, watermark).
