@@ -1,0 +1,2 @@
+lib/pgnsuite/*.php -text
+front/pgnsuite.settings.php -text
