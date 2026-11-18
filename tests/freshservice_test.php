@@ -143,4 +143,11 @@ check('more(): meta.has_more=false ends it even on a full page', A::more(['json'
 check('more(): meta.has_more=true continues', A::more(['json' => ['meta' => ['has_more' => true]], 'link_next' => false], 3) === true);
 check('more(): no meta -> Link rel=next, else a full page', A::more(['json' => [], 'link_next' => true], 3) === true && A::more(['json' => [], 'link_next' => false], 100) === true && A::more(['json' => [], 'link_next' => false], 99) === false);
 
+// ---- Freshservice HTML-escapes plain-text names: GLPI and the category filter must get the real text
+check('text(): entities decoded, spaces trimmed', A::text('  Network &amp; WAN ') === 'Network & WAN' && A::text('a &lt; b') === 'a < b' && A::text(null) === '');
+$escCats = []; A::walkChoices([['value' => 'MS Application &amp; Integration', 'nested_options' => [['value' => 'R&amp;D']]]], [], $escCats);
+check('categories: "&amp;" in a choice becomes "&"', $escCats === [['MS Application & Integration'], ['MS Application & Integration', 'R&D']], json_encode($escCats));
+$tk = A::ticket(['id' => 1, 'subject' => 'A &amp; B', 'category' => 'Tom &amp; Jerry', 'sub_category' => 'x', 'status' => 2, 'priority' => 2, 'type' => 'Incident']);
+check('ticket: subject and category path are decoded', $tk->subject === 'A & B' && $tk->categoryPath === ['Tom & Jerry', 'x']);
+check('users: names are decoded', A::agent(['id' => 1, 'first_name' => 'Ann &amp; Co', 'last_name' => 'X'])->name === 'Ann & Co X');
 done();

@@ -1,4 +1,8 @@
 # Changelog
+## 0.1.0-rc11
+
+- **Freshservice HTML-escapes plain-text names; they are now decoded.** The real category tree carries entities (for example `... &amp; ...`), and the ticket's own `category` fields do the same. Left as is, GLPI would have received categories, groups and users with `&amp;` in their names, and a category filter typed with `&` would never match. The adapter now decodes category and choice words, ticket subjects, group names and user names, and the category filter decodes what the administrator types as well, so `&` and `&amp;` are the same thing. Pinned by tests.
+
 ## 0.1.0-rc10
 
 - **The run now says HOW users were matched.** Besides the main counters, `plugins:itsmmigrator:run` prints a detail line for users: `matched_by_email`, `matched_by_login`, `matched_by_directory_existing_user` (the directory knows the person and they already are a GLPI user), `directory_would_import` (dry run) or `directory_imported` (real run), and `skipped_no_match`. Counts only, never a name or an address. Tested on staging 2 (a dry run reports email 1, would-import 1, skipped 1, imports nobody and writes no map row).

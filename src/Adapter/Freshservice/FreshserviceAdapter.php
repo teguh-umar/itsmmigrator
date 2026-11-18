@@ -155,7 +155,7 @@ final class FreshserviceAdapter implements SourceAdapterInterface
         return new ExternalUser(
             self::SOURCE,
             'agent:' . $id,
-            trim(($a['first_name'] ?? '') . ' ' . ($a['last_name'] ?? '')),
+            self::text(trim(($a['first_name'] ?? '') . ' ' . ($a['last_name'] ?? ''))),
             array_values(array_filter([(string) ($a['email'] ?? '')])),
             null,
             true,
@@ -172,7 +172,7 @@ final class FreshserviceAdapter implements SourceAdapterInterface
         return new ExternalUser(
             self::SOURCE,
             'requester:' . $id,
-            trim(($r['first_name'] ?? '') . ' ' . ($r['last_name'] ?? '')),
+            self::text(trim(($r['first_name'] ?? '') . ' ' . ($r['last_name'] ?? ''))),
             array_values(array_filter($emails)),
             null,
             false,
@@ -189,7 +189,7 @@ final class FreshserviceAdapter implements SourceAdapterInterface
         $rows = $r['json']['groups'] ?? [];
         $out  = [];
         foreach ($rows as $g) {
-            $out[] = new ExternalGroup(self::SOURCE, (string) $g['id'], (string) $g['name'], $this->members($g), self::date($g['updated_at'] ?? null));
+            $out[] = new ExternalGroup(self::SOURCE, (string) $g['id'], self::text($g['name'] ?? ''), $this->members($g), self::date($g['updated_at'] ?? null));
         }
         return new Page($out, self::more($r, count($rows)));
     }
@@ -266,12 +266,12 @@ final class FreshserviceAdapter implements SourceAdapterInterface
             $label = null;
             $kids  = [];
             if (is_string($choice)) {
-                $label = $choice;
+                $label = self::text($choice);
             } elseif (is_array($choice) && array_is_list($choice) && isset($choice[0]) && is_string($choice[0])) {
                 $label = $choice[0];
                 $kids  = is_array($choice[1] ?? null) ? $choice[1] : [];
             } elseif (is_array($choice)) {
-                $label = (string) ($choice['label'] ?? $choice['value'] ?? '');
+                $label = self::text($choice['label'] ?? $choice['value'] ?? '');
                 $kids  = (array) ($choice['choices'] ?? $choice['nested_options'] ?? []);
             } elseif (is_string($key) && is_array($choice)) {
                 $label = $key;
@@ -315,11 +315,11 @@ final class FreshserviceAdapter implements SourceAdapterInterface
     /** @param array<string,mixed> $t */
     public static function ticket(array $t, array $statusLabels = self::STATUS, array $priorityLabels = self::PRIORITY): ExternalTicket
     {
-        $path = array_values(array_filter([(string) ($t['category'] ?? ''), (string) ($t['sub_category'] ?? ''), (string) ($t['item_category'] ?? '')], static fn ($s) => $s !== ''));
+        $path = array_values(array_filter([self::text($t['category'] ?? ''), self::text($t['sub_category'] ?? ''), self::text($t['item_category'] ?? '')], static fn ($s) => $s !== ''));
         return new ExternalTicket(
             self::SOURCE,
             (string) $t['id'],
-            (string) ($t['subject'] ?? ''),
+            self::text($t['subject'] ?? ''),
             (string) ($t['description'] ?? ($t['description_text'] ?? '')),
             $statusLabels[(int) ($t['status'] ?? 0)] ?? self::STATUS[(int) ($t['status'] ?? 0)] ?? 'Open',
             $priorityLabels[(int) ($t['priority'] ?? 0)] ?? self::PRIORITY[(int) ($t['priority'] ?? 0)] ?? 'Medium',
@@ -460,6 +460,15 @@ final class FreshserviceAdapter implements SourceAdapterInterface
     }
 
     // -------------------------------------------------------------- helpers
+
+    /**
+     * Freshservice HTML-escapes some plain-text fields ("Network &amp; WAN"). Names that end up in GLPI or in a
+     * category filter must be the real text. Pure.
+     */
+    public static function text(mixed $v): string
+    {
+        return trim(html_entity_decode((string) $v, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+    }
 
     /** ISO8601 -> UTC DateTimeImmutable, null when absent or unparsable. */
     public static function date(mixed $v): ?\DateTimeImmutable
