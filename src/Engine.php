@@ -4,16 +4,18 @@ namespace GlpiPlugin\Itsmmigrator;
 
 use GlpiPlugin\Itsmmigrator\Adapter\Dto\ExternalCategory;
 use GlpiPlugin\Itsmmigrator\Adapter\Dto\ExternalGroup;
+use GlpiPlugin\Itsmmigrator\Adapter\Dto\ExternalTicket;
 use GlpiPlugin\Itsmmigrator\Adapter\Dto\ExternalUser;
 use GlpiPlugin\Itsmmigrator\Adapter\SourceAdapterInterface;
 use GlpiPlugin\Itsmmigrator\Writer\CategoryWriter;
 use GlpiPlugin\Itsmmigrator\Writer\GroupWriter;
+use GlpiPlugin\Itsmmigrator\Writer\TicketWriter;
 use GlpiPlugin\Itsmmigrator\Writer\UserWriter;
 
 /**
  * Runs the modules of one source, in dependency order, under the global lock (spec §5).
  *
- * This build handles users, groups and categories. The other modules (kb, assets, tickets, problems,
+ * This build handles users, groups, categories and tickets. The other modules (kb, assets, problems,
  * changes) are named in MODULES so the CLI and the UI already know them, and are reported as "not
  * built yet" instead of being silently ignored.
  */
@@ -22,7 +24,7 @@ final class Engine
     /** All modules in the order they must run (users before groups: groups need the user map). */
     public const MODULES = ['users', 'groups', 'categories', 'kb', 'assets', 'tickets', 'problems', 'changes'];
 
-    private const IMPLEMENTED = ['users', 'groups', 'categories'];
+    private const IMPLEMENTED = ['users', 'groups', 'categories', 'tickets'];
 
     /**
      * True while the engine writes. TicketGuard (M4) lets engine writes through and blocks everyone else.
@@ -32,16 +34,19 @@ final class Engine
     private UserWriter $users;
     private GroupWriter $groups;
     private CategoryWriter $categories;
+    private TicketWriter $tickets;
 
     public function __construct(
         private readonly SourceAdapterInterface $adapter,
         ?UserWriter $users = null,
         ?GroupWriter $groups = null,
         ?CategoryWriter $categories = null,
+        ?TicketWriter $tickets = null,
     ) {
         $this->users      = $users ?? new UserWriter();
         $this->groups     = $groups ?? new GroupWriter();
         $this->categories = $categories ?? new CategoryWriter();
+        $this->tickets    = $tickets ?? new TicketWriter();
     }
 
     /**
@@ -119,18 +124,20 @@ final class Engine
     private function runModule(string $module, Context $ctx, int $runId): void
     {
         $limit = (int) ($ctx->flag('limit') ?? 0);
+        $since = self::parseSince($ctx->flag('since'));
         $seen  = 0;
         $page  = 1;
         $ctx->log("Module $module: start");
 
         do {
-            $result = $this->adapter->fetchPage($module, $page, null);
+            $result = $this->adapter->fetchPage($module, $page, $since);
             foreach ($result->items as $item) {
                 $ctx->counters->add($module, 'fetched');
                 match (true) {
                     $item instanceof ExternalUser     => $this->users->process($item, $ctx),
                     $item instanceof ExternalGroup    => $this->groups->process($item, $ctx),
                     $item instanceof ExternalCategory => $this->categories->process($item, $ctx),
+                    $item instanceof ExternalTicket   => $this->tickets->process($item, $this->adapter, $ctx),
                     default => throw new \LogicException('Adapter returned ' . $item::class . ' for module ' . $module),
                 };
                 $seen++;
@@ -145,5 +152,18 @@ final class Engine
         } while ($result->hasMore);
 
         $ctx->log("Module $module: done");
+    }
+
+    /** `--since` (ISO8601) -> UTC DateTimeImmutable; empty or unparsable -> null (everything). Pure. */
+    public static function parseSince(bool|int|string|null $v): ?\DateTimeImmutable
+    {
+        if (!is_string($v) || trim($v) === '') {
+            return null;
+        }
+        try {
+            return (new \DateTimeImmutable($v))->setTimezone(new \DateTimeZone('UTC'));
+        } catch (\Throwable) {
+            throw new \InvalidArgumentException("Cannot read --since '$v' (use ISO8601, e.g. 2024-01-01T00:00:00Z)");
+        }
     }
 }

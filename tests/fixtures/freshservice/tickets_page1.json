@@ -1,0 +1,4 @@
+{"tickets":[
+ {"id":1001,"subject":"Laptop will not boot","description":"<div>Black screen after update</div>","status":2,"priority":3,"type":"Incident","requester_id":501,"responder_id":201,"group_id":301,"category":"Hardware","sub_category":"Laptop","item_category":null,"created_at":"2024-03-01T01:02:03Z","updated_at":"2024-03-02T04:05:06Z","due_by":"2024-03-05T09:00:00Z"},
+ {"id":1002,"subject":"Need VPN access","description":"<p>For the new project</p>","status":5,"priority":1,"type":"Service Request","requester_id":502,"responder_id":null,"group_id":null,"category":null,"sub_category":null,"item_category":null,"created_at":"2024-03-03T00:00:00+07:00","updated_at":"2024-03-04T00:00:00Z","due_by":null}
+]}

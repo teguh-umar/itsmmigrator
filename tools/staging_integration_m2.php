@@ -71,6 +71,8 @@ class FakeAdapter implements SourceAdapterInterface {
     public function getSourceKey(): string { return 'freshservice'; }
     public function supports(string $m): bool { return isset($this->mods[$m]); }
     public function testConnection(): array { return ['ok' => true, 'message' => '']; }
+    public function fetchTicketChildren(string $id): GlpiPlugin\Itsmmigrator\Adapter\Dto\TicketChildren { return new GlpiPlugin\Itsmmigrator\Adapter\Dto\TicketChildren(); }
+    public function downloadAttachment(GlpiPlugin\Itsmmigrator\Adapter\Dto\ExternalAttachment $a, string $dest): void {}
     public function fetchPage(string $m, int $page, ?DateTimeImmutable $since): Page {
         $pages = $this->mods[$m]; return new Page($pages[$page - 1] ?? [], $page < count($pages));
     }
@@ -214,6 +216,44 @@ if ($m) {
     chk('created user has no profile outside the target entity', countElementsInTable('glpi_profiles_users', ['users_id' => (int) $m['items_id'], ['NOT' => ['entities_id' => $target]]]) === 0);
 }
 
+
+// ---- LDAP step (spec §4a step 3) with a stub lookup: no real directory is touched
+class StubLdap implements GlpiPlugin\Itsmmigrator\Matching\LdapLookupInterface {
+    public array $calls = [];
+    public function __construct(private array $answers) {}
+    public function findAndImport(array $emails, string $login): ?array { $this->calls[] = [$emails, $login]; return $this->answers[$login ?: ($emails[0] ?? '')] ?? null; }
+}
+$ldapUserId = (new User())->add(['name' => "$tag.ldapuser"]);  // stands for a user the directory import created
+$cleanup[] = ['User', $ldapUserId];
+$other = (new Profile())->getFromDB(1) ? 1 : 1;
+(new Profile_User())->add(['users_id' => $ldapUserId, 'profiles_id' => 1, 'entities_id' => $sibling, 'is_recursive' => 0]); // a rule-granted profile outside the target
+$stub = new StubLdap(["$tag.fromldap" => ['users_id' => $ldapUserId, 'imported' => true], "$tag.known" => ['users_id' => $ann, 'imported' => false]]);
+$adapter3 = new FakeAdapter(['users' => [[
+    new ExternalUser('freshservice', 'l1', 'From LDAP', [], "$tag.fromldap"),
+    new ExternalUser('freshservice', 'l2', 'Known in LDAP and GLPI', [], "$tag.known"),
+    new ExternalUser('freshservice', 'l3', 'Not in LDAP', [], "$tag.nowhere"),
+]]]);
+$res = (new Engine($adapter3, new GlpiPlugin\Itsmmigrator\Writer\UserWriter($stub)))->run($source, 'cli', ['users'], [], $logger);
+$m = MapRepository::find('freshservice', 'user', 'l1');
+chk('ldap: imported user is mapped (action matched)', $m && (int) $m['items_id'] === (int) $ldapUserId && $m['action'] === 'matched' && $m['status'] === 'ok', json_encode($res['counters']['users'] ?? null));
+chk('ldap: leak guard removed the profile outside the target entity', countElementsInTable('glpi_profiles_users', ['users_id' => $ldapUserId, ['NOT' => ['entities_id' => $target]]]) === 0);
+$m = MapRepository::find('freshservice', 'user', 'l2');
+chk('ldap: a user already in GLPI is matched, profiles untouched', $m && (int) $m['items_id'] === (int) $ann);
+$m = MapRepository::find('freshservice', 'user', 'l3');
+chk('ldap: not found anywhere -> skipped', $m && $m['status'] === 'skipped');
+$calls = count($stub->calls);
+(new Engine($adapter3, new GlpiPlugin\Itsmmigrator\Writer\UserWriter($stub)))->run($source, 'cli', ['users'], [], $logger);
+chk('ldap: a second run asks the directory for nobody (all mapped)', count($stub->calls) === $calls);
+(new Engine(new FakeAdapter(['users' => [[new ExternalUser('freshservice', 'l4', 'Skipped by flag', [], "$tag.fromldap")]]]), new GlpiPlugin\Itsmmigrator\Writer\UserWriter($stub)))->run($source, 'cli', ['users'], ['ldap_lookup' => false], $logger);
+chk('ldap: --no-ldap-lookup never calls the directory', count($stub->calls) === $calls);
+
+// the real lookup against staging directories (bind passwords are blank there): must degrade to "not found", never throw
+$real = new GlpiPlugin\Itsmmigrator\Matching\GlpiLdapLookup(function (string $m) use (&$log) { $log[] = $m; });
+$t0 = microtime(true);
+$r1 = $real->findAndImport(["$tag.nobody@example.test"], "$tag.nobody");
+$r2 = $real->findAndImport(["$tag.nobody2@example.test"], "$tag.nobody2");
+chk('real lookup: no reachable directory -> null, no exception', $r1 === null && $r2 === null);
+chk('real lookup: a down directory is skipped for the rest of the run', (microtime(true) - $t0) < 60);
 // ---- cleanup everything this script created (staging only)
 $DB->delete('glpi_plugin_itsmmigrator_maps', ['sources_id' => $sid]);
 $DB->delete('glpi_plugin_itsmmigrator_runs', ['sources_id' => $sid]);
