@@ -51,7 +51,7 @@ class FakeAdapter implements SourceAdapterInterface {
     public function getSourceKey(): string { return 'freshservice'; }
     public function supports(string $m): bool { return $m === 'tickets'; }
     public function testConnection(): array { return ['ok' => true, 'message' => '']; }
-    public function fetchPage(string $m, int $p, ?DateTimeImmutable $since): Page { return new Page($this->tickets, false); }
+    public function fetchPage(string $m, int $p, ?DateTimeImmutable $since, ?string $cursor = null): Page { return new Page($this->tickets, false); }
     public function fetchTicketChildren(string $id): TicketChildren {
         $this->childCalls++;
         $c = $this->children[$id] ?? new TicketChildren();

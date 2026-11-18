@@ -73,7 +73,7 @@ class FakeAdapter implements SourceAdapterInterface {
     public function testConnection(): array { return ['ok' => true, 'message' => '']; }
     public function fetchTicketChildren(string $id): GlpiPlugin\Itsmmigrator\Adapter\Dto\TicketChildren { return new GlpiPlugin\Itsmmigrator\Adapter\Dto\TicketChildren(); }
     public function downloadAttachment(GlpiPlugin\Itsmmigrator\Adapter\Dto\ExternalAttachment $a, string $dest): void {}
-    public function fetchPage(string $m, int $page, ?DateTimeImmutable $since): Page {
+    public function fetchPage(string $m, int $page, ?DateTimeImmutable $since, ?string $cursor = null): Page {
         $pages = $this->mods[$m]; return new Page($pages[$page - 1] ?? [], $page < count($pages));
     }
 }

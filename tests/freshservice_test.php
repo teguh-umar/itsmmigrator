@@ -86,8 +86,8 @@ $routes = [
 ];
 $ad = new A(new FreshserviceClient('https://acme.example.test', KEY, transport($routes, $calls), $noSleep, 0.0));
 $p1 = $ad->fetchPage('users', 1, null);
-check('users page 1 = the agents, more to come (requesters)', count($p1->items) === 1 && $p1->hasMore && $p1->items[0]->srcId === 'agent:201' && $p1->items[0]->isTechnician);
-$p2 = $ad->fetchPage('users', 2, null);
+check('users page 1 = the agents, cursor points at the requesters', $p1->cursor === 'requesters:1' && count($p1->items) === 1 && $p1->hasMore && $p1->items[0]->srcId === 'agent:201' && $p1->items[0]->isTechnician);
+$p2 = $ad->fetchPage('users', 2, null, $p1->cursor);
 check('users page 2 = the requesters, last', count($p2->items) === 2 && !$p2->hasMore && $p2->items[0]->srcId === 'requester:501');
 check('requester keeps secondary e-mails', $p2->items[0]->emails === ['req.uno@example.test', 'uno.alt@example.test']);
 check('agent and requester ids never collide', $p1->items[0]->srcId !== 'requester:201');

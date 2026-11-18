@@ -1,0 +1,48 @@
+<?php
+
+use GlpiPlugin\Itsmmigrator\Engine;
+use GlpiPlugin\Itsmmigrator\RightDefinition;
+use GlpiPlugin\Itsmmigrator\WebRun;
+
+/**
+ * The Run page's endpoint (spec §11): POST only; the CSRF token travels in the X-Glpi-Csrf-Token header
+ * and is checked by GLPI's own listener before this file runs; takes the same global lock as the CLI;
+ * one batch per request. It accepts only: action (start|step|abort), sources_id, run_id, modules, and
+ * the run flags listed in WebRun::cleanFlags(). Nothing else is read.
+ */
+include('../../../inc/includes.php');
+
+header('Content-Type: application/json; charset=utf-8');
+
+$reply = static function (int $code, array $body): never {
+    http_response_code($code);
+    echo json_encode($body);
+    exit;
+};
+
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+    $reply(405, ['success' => false, 'message' => 'POST only']);
+}
+Session::checkLoginUser();
+if (!Session::haveRight(RightDefinition::RUN, UPDATE)) {
+    $reply(403, ['success' => false, 'message' => 'Not allowed']);
+}
+
+$action = (string) ($_POST['action'] ?? '');
+
+switch ($action) {
+    case 'start':
+        $modules = array_values(array_intersect(Engine::MODULES, array_map('strval', (array) ($_POST['modules'] ?? []))));
+        $flags   = array_intersect_key($_POST, array_flip(['dry_run', 'limit', 'retry_failed', 'recreate_missing', 'create_missing_users', 'activate_created_users', 'ldap_lookup', 'assign_profiles', 'fallback_user', 'since']));
+        $reply(200, WebRun::start((int) ($_POST['sources_id'] ?? 0), $modules, $flags));
+
+        // no break: $reply() never returns
+    case 'step':
+        $reply(200, WebRun::step((int) ($_POST['run_id'] ?? 0)));
+
+    case 'abort':
+        $reply(200, WebRun::abort((int) ($_POST['run_id'] ?? 0)));
+
+    default:
+        $reply(400, ['success' => false, 'message' => 'Unknown action']);
+}

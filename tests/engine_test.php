@@ -36,8 +36,16 @@ check('unknown mode behaves as none', UserWriter::profileFor('weird', false, 5, 
 
 // ---- the engine takes the lock before it touches anything, and releases in finally
 $src = file_get_contents(ITSM_ROOT . '/src/Engine.php');
-check('engine acquires the lock before running modules', strpos($src, 'Lock::acquire') < strpos($src, 'runModule($module'));
+check('engine acquires the lock before running modules', strpos($src, 'Lock::acquire') < strpos($src, '$this->step($pos'));
 check('engine releases the lock in a finally block', preg_match('/finally\s*\{[^}]*Lock::release/s', $src) === 1);
 check('engine restores the writing flag', str_contains($src, 'self::$writing = $prev'));
 
+// ---- position (shared by the CLI and the web runner)
+$pos = Engine::newPosition(['users', 'tickets']);
+check('a new position starts on the first module, page 1', $pos['mi'] === 0 && $pos['page'] === 1 && $pos['cursor'] === null && $pos['offset'] === 0 && $pos['seen'] === 0 && $pos['modules'] === ['users', 'tickets']);
+check('the web batch for tickets is small, for the rest large', Engine::WEB_BATCH_TICKETS <= 20 && Engine::WEB_BATCH_OTHER >= 50);
+check('Counters survive a round trip through a stored run', (function () {
+    $c = new Counters(); $c->add('users', 'created', 3); $c->add('tickets', 'failed', 1);
+    return Counters::fromArray($c->all())->all() === $c->all();
+})());
 done();

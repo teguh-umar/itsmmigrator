@@ -34,10 +34,6 @@ final class FreshserviceAdapter implements SourceAdapterInterface
     private const PRIORITY = [1 => 'Low', 2 => 'Medium', 3 => 'High', 4 => 'Urgent'];
     private const TASK     = [1 => 'todo', 2 => 'in_progress', 3 => 'done'];
 
-    /** users module = agents first, then requesters. Pages are requested in order, so a cursor is enough. */
-    private string $userPhase = 'agents';
-    private int $userPage = 1;
-
     public function __construct(private readonly FreshserviceClient $client)
     {
     }
@@ -62,10 +58,10 @@ final class FreshserviceAdapter implements SourceAdapterInterface
         }
     }
 
-    public function fetchPage(string $module, int $page, ?\DateTimeImmutable $since): Page
+    public function fetchPage(string $module, int $page, ?\DateTimeImmutable $since, ?string $cursor = null): Page
     {
         return match ($module) {
-            'users'      => $this->usersPage($page),
+            'users'      => $this->usersPage($cursor),
             'groups'     => $this->groupsPage($page),
             'categories' => $this->categoriesPage($page),
             'tickets'    => $this->ticketsPage($page, $since),
@@ -75,14 +71,20 @@ final class FreshserviceAdapter implements SourceAdapterInterface
 
     // ---------------------------------------------------------------- users
 
-    private function usersPage(int $page): Page
+    /**
+     * users = agents first, then requesters. The position is the cursor "<phase>:<page>" so the next
+     * page can be fetched by another process. An unreadable cursor starts over at the first agents page.
+     */
+    private function usersPage(?string $cursor): Page
     {
-        if ($page === 1) {
-            $this->userPhase = 'agents';
-            $this->userPage  = 1;
+        $phase = 'agents';
+        $page  = 1;
+        if ($cursor !== null && preg_match('/^(agents|requesters):(\d{1,4})$/', $cursor, $m)) {
+            $phase = $m[1];
+            $page  = (int) $m[2];
         }
-        $isAgent = $this->userPhase === 'agents';
-        $r       = $this->client->get($isAgent ? '/agents' : '/requesters', ['per_page' => FreshserviceClient::PER_PAGE, 'page' => $this->userPage]);
+        $isAgent = $phase === 'agents';
+        $r       = $this->client->get($isAgent ? '/agents' : '/requesters', ['per_page' => FreshserviceClient::PER_PAGE, 'page' => $page]);
         $rows    = $r['json'][$isAgent ? 'agents' : 'requesters'] ?? [];
 
         $items = [];
@@ -90,19 +92,14 @@ final class FreshserviceAdapter implements SourceAdapterInterface
             $items[] = $isAgent ? self::agent($row) : self::requester($row);
         }
 
-        $more = $r['link_next'] || count($rows) >= FreshserviceClient::PER_PAGE;
-        if ($more) {
-            $this->userPage++;
-            return new Page($items, true);
+        if ($r['link_next'] || count($rows) >= FreshserviceClient::PER_PAGE) {
+            return new Page($items, true, $phase . ':' . ($page + 1));
         }
         if ($isAgent) {
-            $this->userPhase = 'requesters';
-            $this->userPage  = 1;
-            return new Page($items, true); // requesters follow
+            return new Page($items, true, 'requesters:1'); // requesters follow
         }
         return new Page($items, false);
     }
-
     /** @param array<string,mixed> $a */
     public static function agent(array $a): ExternalUser
     {

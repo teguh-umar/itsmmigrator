@@ -15,36 +15,47 @@ final class Menu
 
     private const BASE = '/plugins/itsmmigrator/front/';
 
-    /** Provider for the shared Menu: null when the user may see nothing here. */
+    /**
+     * Provider for the shared Menu: null when the user may see nothing here.
+     * Sources need the config right; the Run page and the Needs review list need the run right.
+     * The two are independent, as in the other suite plugins.
+     */
     public static function entry(): ?array
     {
         $config = Session::haveRight(RightDefinition::CONFIG, READ);
-        if (!$config) {
+        $run    = Session::haveRight(RightDefinition::RUN, READ);
+        if (!$config && !$run) {
             return null;
         }
 
-        $links = [];
-        if (Session::haveRight(RightDefinition::CONFIG, UPDATE)) {
-            $links['add'] = self::BASE . 'source.form.php';
+        $options = [];
+        $list    = self::BASE . 'config.php';
+        if ($config) {
+            $links = [];
+            if (Session::haveRight(RightDefinition::CONFIG, UPDATE)) {
+                $links['add'] = self::BASE . 'source.form.php';
+            }
+            // Key must equal the third element of Source::getSectorizedDetails().
+            $options['source'] = [
+                'title'          => Source::getTypeName(2),
+                'icon'           => Source::getIcon(),
+                'page'           => $list,
+                'links'          => $links,
+                'lists_itemtype' => Source::class,
+            ];
         }
-        $list = self::BASE . 'config.php';
+        if ($run) {
+            $options['run']    = ['title' => __('Runs', 'itsmmigrator'), 'icon' => 'ti ti-player-play', 'page' => self::BASE . 'run.php', 'links' => []];
+            $options['review'] = ['title' => __('Needs review', 'itsmmigrator'), 'icon' => 'ti ti-user-question', 'page' => self::BASE . 'review.php', 'links' => []];
+        }
 
         return [
             'title'   => __('ITSM Migrator', 'itsmmigrator'),
             'icon'    => 'ti ti-database-import',
-            'page'    => $list,
+            'page'    => $config ? $list : self::BASE . 'run.php',
             'order'   => self::ORDER,
             'links'   => [],
-            'options' => [
-                // Key must equal the third element of Source::getSectorizedDetails().
-                'source' => [
-                    'title'          => Source::getTypeName(2),
-                    'icon'           => Source::getIcon(),
-                    'page'           => $list,
-                    'links'          => $links,
-                    'lists_itemtype' => Source::class,
-                ],
-            ],
+            'options' => $options,
         ];
     }
 
