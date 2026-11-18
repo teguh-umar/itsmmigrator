@@ -10,12 +10,26 @@ final class Counters
     /** @var array<string, array<string,int>> */
     private array $data = [];
 
+    /** @var array<string, array<string,int>> finer counts that explain the main ones (how a user was matched); never user data */
+    private array $details = [];
+
     public function add(string $module, string $key, int $n = 1): void
     {
         if (!in_array($key, self::KEYS, true)) {
             throw new \InvalidArgumentException("Unknown counter '$key'");
         }
         $this->data[$module][$key] = ($this->data[$module][$key] ?? 0) + $n;
+    }
+
+    public function detail(string $module, string $key, int $n = 1): void
+    {
+        $this->details[$module][$key] = ($this->details[$module][$key] ?? 0) + $n;
+    }
+
+    /** @return array<string, array<string,int>> */
+    public function details(): array
+    {
+        return $this->details;
     }
 
     public function get(string $module, string $key): int

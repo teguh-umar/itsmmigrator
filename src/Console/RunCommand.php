@@ -142,6 +142,9 @@ class RunCommand extends AbstractCommand
             $table->addRow(array_merge([$module], array_values($row)));
         }
         $table->render();
+        foreach ((array) ($res['details'] ?? []) as $module => $row) {
+            $output->writeln(sprintf('%s detail: %s', $module, implode(', ', array_map(static fn ($k, $n): string => "$k $n", array_keys($row), array_values($row)))));
+        }
         $output->writeln(sprintf('Run %d: %s', $res['run_id'], $res['status']));
 
         return $res['status'] === 'success' ? self::SUCCESS : self::FAILURE;
