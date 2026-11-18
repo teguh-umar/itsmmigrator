@@ -1,0 +1,14 @@
+{
+    "name": "pgn/glpi-itsmmigrator",
+    "description": "Import and sync external ITSM data (Freshservice, ServiceDesk Plus) into GLPI 11",
+    "type": "glpi-plugin",
+    "license": "GPL-3.0-or-later",
+    "require": {
+        "php": ">=8.2"
+    },
+    "autoload": {
+        "psr-4": {
+            "GlpiPlugin\\Itsmmigrator\\": "src/"
+        }
+    }
+}
