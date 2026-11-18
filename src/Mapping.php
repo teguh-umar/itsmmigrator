@@ -32,7 +32,9 @@ final class Mapping
         $custom = self::lower($custom);
         $v = $custom[$key] ?? self::DEFAULT_STATUS[$key] ?? null;
         if ($v === null) {
-            return ['value' => $hasAssignee ? self::ASSIGNED : self::NEW, 'known' => false];
+            // An account's own wording ("Waiting on Approval", "On hold - vendor"): a best guess by words, still reported
+            // as unmapped so the administrator can set it in status_map.
+            return ['value' => self::guessStatus($key, $hasAssignee), 'known' => false];
         }
         if ($v === 'assigned_or_new') {
             return ['value' => $hasAssignee ? self::ASSIGNED : self::NEW, 'known' => true];
@@ -40,6 +42,16 @@ final class Mapping
         return ['value' => (int) $v, 'known' => true];
     }
 
+    /** Best guess for a status label nobody mapped. Pure. */
+    public static function guessStatus(string $lowerLabel, bool $hasAssignee): int
+    {
+        return match (true) {
+            str_contains($lowerLabel, 'wait'), str_contains($lowerLabel, 'pend'), str_contains($lowerLabel, 'hold') => self::WAITING,
+            str_contains($lowerLabel, 'resolv'), str_contains($lowerLabel, 'solv'), str_contains($lowerLabel, 'complet') => self::SOLVED,
+            str_contains($lowerLabel, 'clos'), str_contains($lowerLabel, 'cancel'), str_contains($lowerLabel, 'reject') => self::CLOSED,
+            default => $hasAssignee ? self::ASSIGNED : self::NEW,
+        };
+    }
     /** @param array<string,mixed> $custom @return array{value:int, known:bool} unknown -> Medium (3) */
     public static function priority(string $label, array $custom = []): array
     {

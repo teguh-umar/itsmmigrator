@@ -5,7 +5,7 @@ A GLPI 11 plugin that brings data from an external ITSM tool into GLPI, with GLP
 - **Freshservice (API v2):** a one-time import of the history, before Freshservice is taken down.
 - **ManageEngine ServiceDesk Plus on-premises (REST API v3):** an initial import plus a weekly delta sync. *Not built yet (M4).*
 
-Status: release candidate `0.1.0-rc6`. See `CHANGELOG.md` for what each build contains and for the open items.
+Status: release candidate `0.1.0-rc7`. See `CHANGELOG.md` for what each build contains and for the open items.
 
 ## What it guarantees
 
@@ -15,7 +15,7 @@ Status: release candidate `0.1.0-rc6`. See `CHANGELOG.md` for what each build co
 | One target entity per source | Everything the plugin creates goes into that entity with `is_recursive = 0`. Nothing lands in the root entity. A ticket that a business rule moves is put back. |
 | Never a duplicate | A mapping table (`source`, `src_type`, `src_id`) is written right after every `add()`; children (followups, tasks, documents) are mapped one by one; there are natural-key fallbacks; one global lock for CLI, web and cron. |
 | Existing users are matched, never changed | E-mail (all addresses, alias domains second), then login, then the directory, then a local user only with `--create-missing-users`. Ambiguity is `needs_review`, never a guess. |
-| Existing users are never sent to the LDAP import | GLPI's import call re-activates an inactive user. The lookup searches read-only and imports only a person who is not yet a GLPI user. |
+| Existing users are never sent to the LDAP import | GLPI's import call re-activates an inactive user. The lookup searches read-only and imports only a person who is not yet a GLPI user. A **dry run never imports**; a directory that cannot be bound or searched is switched off for the run and its warnings (which carry base DNs and e-mail addresses) are swallowed, not logged and not shown. |
 | Existing groups and categories are matched | What the target entity can already see (its own rows plus recursive rows of ancestor entities), nearest entity first. |
 | A delta, not a re-read | The source keeps a **watermark**: the newest `updated_at` of the last complete, successful run. The next run reads from the watermark minus 2 hours. It moves only after a real run that read the whole ticket list (not a dry run, not `--limit`) and ended success or partial; a fetch error leaves it alone; it never moves back. `--full`, `--retry-failed` and `--recreate-missing` read everything; `--since` wins over all. |
 | Re-runnable | Resume (`in_progress`), `--retry-failed`, `--recreate-missing`. A second run with no source change changes nothing. |
@@ -48,7 +48,7 @@ GLPI 11 only loads plugin commands named `plugins:<key>:<name>`, so these are **
 
 | Command | What it does |
 |---|---|
-| `plugins:itsmmigrator:run` | Import or sync one source. Run it as a GLPI user: `--username=<login>`. |
+| `plugins:itsmmigrator:run` | Import or sync one source. **`--username=<glpi login>` is required** (the CLI has no session of its own; the user's profile decides which entities can be written to). |
 | `plugins:itsmmigrator:verify` | Read-only consistency check. Exit code 0 = clean, 1 = something found. The gate before production. |
 | `plugins:itsmmigrator:purge` | Drop the plugin tables, or one source's map rows (`--source=<id>`). Does nothing without `--confirm`. Migrated GLPI data is never deleted. |
 
@@ -78,4 +78,4 @@ The offline suites need the `mbstring` extension. The staging tools create throw
 
 ## Documentation
 
-The user manual is written by Copilot (hub §0 rule 9). The step-by-step deployment is `docs/runbook-v0.1.0-rc6.md`.
+The user manual is written by Copilot (hub §0 rule 9). The step-by-step deployment is `docs/runbook-v0.1.0-rc7.md`.

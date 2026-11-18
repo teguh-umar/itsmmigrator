@@ -42,7 +42,7 @@ final class GroupWriter
                 if ($hit !== null) {
                     $groupId = (int) $hit['id'];
                     $owned   = (int) $hit['entities_id'] === $ctx->targetEntity();
-                    $ctx->log(sprintf('group %s "%s" matched GLPI group %d in entity %d', $g->srcId, $g->name, $groupId, (int) $hit['entities_id']));
+                    $ctx->log(sprintf('group %s matched GLPI group %d in entity %d', $g->srcId, $groupId, (int) $hit['entities_id']));
                 }
             }
 

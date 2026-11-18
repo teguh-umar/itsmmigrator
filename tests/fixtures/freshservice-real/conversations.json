@@ -1,0 +1,50 @@
+{
+    "conversations": [
+        {
+            "id": 2796,
+            "user_id": 1000,
+            "to_emails": [
+                "user11@example.test"
+            ],
+            "body": "<div>Text 4</div>",
+            "body_text": "Text 4",
+            "ticket_id": 2742,
+            "created_at": "2026-11-18T08:03:43Z",
+            "updated_at": "2026-11-18T08:03:43Z",
+            "incoming": false,
+            "private": false,
+            "support_email": "user10@example.test",
+            "source": 0,
+            "category": "Choice 1191",
+            "from_email": "value-42",
+            "cc_emails": [],
+            "bcc_emails": [],
+            "attachments": []
+        },
+        {
+            "id": 2797,
+            "user_id": 1000,
+            "to_emails": [
+                "user11@example.test"
+            ],
+            "body": "<div>Text 5</div>",
+            "body_text": "Text 5",
+            "ticket_id": 2742,
+            "created_at": "2026-11-18T07:59:00Z",
+            "updated_at": "2026-11-18T07:59:00Z",
+            "incoming": false,
+            "private": false,
+            "support_email": "user10@example.test",
+            "source": 0,
+            "category": "Choice 1191",
+            "from_email": "value-42",
+            "cc_emails": [],
+            "bcc_emails": [],
+            "attachments": []
+        }
+    ],
+    "meta": {
+        "count": 2,
+        "has_more": false
+    }
+}

@@ -18,8 +18,8 @@ use Symfony\Component\Console\Output\OutputInterface;
  * GLPI 11 only loads plugin commands named `plugins:<key>:<name>`, so this is
  * `plugins:itsmmigrator:run` (spec §10 called it `itsmmigrator:run`).
  *
- * Run it as a real GLPI user: `--username=<login>` (GLPI's own option). Ticket rules and the
- * entity checks need a session. The API key is never an option: it is read from the encrypted row.
+ * Run it as a real GLPI user: `--username=<login>` (required). Ticket rules and the entity checks need a
+ * session, and the CLI has none of its own. The API key is never an option: it is read from the encrypted row.
  */
 class RunCommand extends AbstractCommand
 {
@@ -30,6 +30,7 @@ class RunCommand extends AbstractCommand
         $this->setName('plugins:itsmmigrator:run');
         $this->setDescription('Import or sync one ITSM source into its target entity');
 
+        $this->addOption('username', 'u', InputOption::VALUE_REQUIRED, 'GLPI login to run as (required): rules and entity checks need a session');
         $this->addOption('source', null, InputOption::VALUE_REQUIRED, 'Source id or name (required)');
         $this->addOption('modules', null, InputOption::VALUE_REQUIRED, 'Comma list of: ' . implode(',', Engine::MODULES) . ' (default: all supported)');
         $this->addOption('since', null, InputOption::VALUE_REQUIRED, 'ISO8601 start for tickets; default: the source watermark minus 2 hours, or everything without one');
@@ -49,6 +50,18 @@ class RunCommand extends AbstractCommand
 
     protected function execute(InputInterface $input, OutputInterface $output)
     {
+        $username = $input->getOption('username');
+        if ($username === null || $username === '') {
+            $output->writeln('<error>--username is required: the GLPI login to run as (its profile decides which entities it can write to)</error>');
+            return self::FAILURE;
+        }
+        try {
+            $this->loadUserSession((string) $username);
+        } catch (\InvalidArgumentException $e) {
+            $output->writeln('<error>No GLPI user named that</error>');
+            return self::FAILURE;
+        }
+
         $ref = $input->getOption('source');
         if ($ref === null || $ref === '') {
             $output->writeln('<error>--source is required (id or name)</error>');
