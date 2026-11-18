@@ -83,7 +83,7 @@ final class UserWriter
                         $this->ldapWarned = true;
                     }
                 } else {
-                    $found = $this->ldap->findAndImport($emails, $login);
+                    $found = $this->ldap->findAndImport($emails, $login, $ctx->dryRun());
                     if ($found !== null) {
                         if ($found['imported'] && !$ctx->dryRun()) {
                             // A user the plugin brought in from the directory: same leak guard as a created user.

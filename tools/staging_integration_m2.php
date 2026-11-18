@@ -248,7 +248,7 @@ if ($m) {
 class StubLdap implements GlpiPlugin\Itsmmigrator\Matching\LdapLookupInterface {
     public array $calls = [];
     public function __construct(private array $answers) {}
-    public function findAndImport(array $emails, string $login): ?array { $this->calls[] = [$emails, $login]; return $this->answers[$login ?: ($emails[0] ?? '')] ?? null; }
+    public function findAndImport(array $emails, string $login, bool $dryRun = false): ?array { $this->calls[] = [$emails, $login]; return $this->answers[$login ?: ($emails[0] ?? '')] ?? null; }
 }
 $ldapUserId = (new User())->add(['name' => "$tag.ldapuser"]);  // stands for a user the directory import created
 $cleanup[] = ['User', $ldapUserId];

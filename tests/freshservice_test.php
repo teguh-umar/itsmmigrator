@@ -110,10 +110,11 @@ check('memberRefs: objects with an id accepted, duplicates dropped', A::memberRe
 // ---- tickets
 $calls = [];
 $pg = $ad->fetchPage('tickets', 1, null);
-check('tickets: updated_since is always sent (default 2010)', str_contains($calls[0]['url'], 'updated_since=2010-01-01T00%3A00%3A00Z'));
+$listCalls = function () use (&$calls) { return array_values(array_filter($calls, fn ($c) => str_contains($c['url'], '/api/v2/tickets?'))); };
+check('tickets: updated_since is always sent (default 2010)', str_contains($listCalls()[0]['url'], 'updated_since=2010-01-01T00%3A00%3A00Z'));
 $since = new DateTimeImmutable('2024-02-01T00:00:00Z');
 $ad->fetchPage('tickets', 1, $since);
-check('tickets: --since is honoured', str_contains($calls[1]['url'], 'updated_since=2024-02-01T00%3A00%3A00Z'));
+check('tickets: --since is honoured', str_contains($listCalls()[1]['url'], 'updated_since=2024-02-01T00%3A00%3A00Z'));
 $t = $pg->items[0];
 check('ticket: id, subject, content', $t->srcId === '1001' && $t->subject === 'Laptop will not boot' && str_contains($t->content, 'Black screen'));
 check('ticket: numeric codes become source labels', $t->status === 'Open' && $t->priority === 'High' && $t->type === 'Incident');
@@ -133,8 +134,13 @@ check('children: note author is the raw id (resolved later)', $ch->notes[0]->aut
 check('children: one task, done', count($ch->tasks) === 1 && $ch->tasks[0]->state === 'done' && $ch->tasks[0]->assigneeSrcId === 'agent:201');
 check('children: worklog 01:30 = 5400 s', count($ch->worklogs) === 1 && $ch->worklogs[0]->seconds === 5400);
 check('children: ticket + note attachments, note one linked to its note', count($ch->attachments) === 2 && $ch->attachments[0]->noteSrcId === null && $ch->attachments[1]->noteSrcId === '7001');
-check('children: resolution text and resolved date', str_contains((string) $ch->resolution, 'Reimaged') && $ch->resolvedAt?->format('c') === '2024-03-02T03:00:00+00:00' && $ch->closedAt === null);
+check('children: resolution from resolution_notes_html, and the resolved date', str_contains((string) $ch->resolution, '<div>Reimaged') && $ch->resolvedAt?->format('c') === '2024-03-02T03:00:00+00:00' && $ch->closedAt === null);
 check('seconds(): hh:mm and hh:mm:ss', A::seconds('00:45') === 2700 && A::seconds('02:00:30') === 7230 && A::seconds('') === 0);
 check('every request was a GET to /api/v2 on the configured host', (function () use ($calls) { foreach ($calls as $c) { if (!str_starts_with($c['url'], 'https://acme.example.test/api/v2/')) { return false; } } return true; })());
+
+// ---- paging: meta.has_more is authoritative when the answer carries it (real Freshservice sub-lists do)
+check('more(): meta.has_more=false ends it even on a full page', A::more(['json' => ['meta' => ['count' => 100, 'has_more' => false]], 'link_next' => true], 100) === false);
+check('more(): meta.has_more=true continues', A::more(['json' => ['meta' => ['has_more' => true]], 'link_next' => false], 3) === true);
+check('more(): no meta -> Link rel=next, else a full page', A::more(['json' => [], 'link_next' => true], 3) === true && A::more(['json' => [], 'link_next' => false], 100) === true && A::more(['json' => [], 'link_next' => false], 99) === false);
 
 done();

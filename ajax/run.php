@@ -14,7 +14,16 @@ include('../../../inc/includes.php');
 
 header('Content-Type: application/json; charset=utf-8');
 
-$reply = static function (int $code, array $body): never {
+// Anything that prints while a batch runs (a PHP warning shown by GLPI in debug mode, a notice from a core call)
+// would be put in front of the JSON and break the page. Everything printed is collected and thrown away; only
+// the JSON is sent. (The warnings still reach the PHP log.)
+$bufferLevel = ob_get_level();
+ob_start();
+
+$reply = static function (int $code, array $body) use ($bufferLevel): never {
+    while (ob_get_level() > $bufferLevel) {
+        ob_end_clean();
+    }
     http_response_code($code);
     echo json_encode($body);
     exit;

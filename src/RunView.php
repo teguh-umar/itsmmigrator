@@ -172,7 +172,14 @@ final class RunView
     function say(lines) { (Array.isArray(lines) ? lines : [lines]).forEach(l => { log.textContent += l + '\\n'; }); log.scrollTop = log.scrollHeight; }
     function post(data) {
         return fetch(AJAX, { method: 'POST', credentials: 'same-origin', body: (data instanceof URLSearchParams) ? data : new URLSearchParams(data),
-            headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-Glpi-Csrf-Token': token() } }).then(r => r.json());
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-Glpi-Csrf-Token': token() } })
+            .then(r => r.text().then(t => {
+                try { return JSON.parse(t); }
+                catch (e) {
+                    // Not JSON: say what the server sent (tags stripped), instead of a cryptic parse error.
+                    throw new Error('HTTP ' + r.status + ', the server did not answer JSON: ' + t.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200));
+                }
+            }));
     }
     function showCounters(c) {
         const mods = Object.keys(c || {});
@@ -191,7 +198,7 @@ final class RunView
             if (r.progress) { const pct = Math.round(100 * r.progress.index / Math.max(1, r.progress.of)); bar.style.width = pct + '%'; bar.textContent = r.progress.module + ' (' + pct + '%)'; }
             if (r.done) { bar.style.width = '100%'; bar.textContent = r.status; finish('Run finished: ' + r.status); return; }
             return loop();
-        }).catch(e => finish('ERROR: ' + e));
+        }).catch(e => { const id = runId; finish('ERROR: ' + e.message); if (id) { post({ action: 'abort', run_id: id }).then(() => say('The run was stopped and the lock released.')).catch(() => say('Could not stop the run: use Release stale lock after 15 minutes.')); } });
     }
     start.addEventListener('click', function () {
         const fd = new FormData(form); const data = new URLSearchParams();

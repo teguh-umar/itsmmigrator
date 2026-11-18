@@ -34,8 +34,56 @@ final class FreshserviceAdapter implements SourceAdapterInterface
     private const PRIORITY = [1 => 'Low', 2 => 'Medium', 3 => 'High', 4 => 'Urgent'];
     private const TASK     = [1 => 'todo', 2 => 'in_progress', 3 => 'done'];
 
+    /** @var array{status: array<int,string>, priority: array<int,string>}|null status and priority wording of THIS account */
+    private ?array $labels = null;
+
     public function __construct(private readonly FreshserviceClient $client)
     {
+    }
+
+    /**
+     * The account's own wording for status and priority codes, read once from the ticket form
+     * (`status` choices: id 2 => "Open", 6 => "In Progress", 7 => "Waiting on Approval" ...). A code the
+     * account added is therefore reported by its real label and mapped by the source's status_map, instead
+     * of being silently treated as "Open". Falls back to the built-in names when the form cannot be read.
+     *
+     * @return array{status: array<int,string>, priority: array<int,string>}
+     */
+    private function labels(): array
+    {
+        if ($this->labels !== null) {
+            return $this->labels;
+        }
+        $this->labels = ['status' => self::STATUS, 'priority' => self::PRIORITY];
+        try {
+            $fields = $this->client->get('/ticket_form_fields')['json']['ticket_fields'] ?? [];
+        } catch (ClientException) {
+            return $this->labels;
+        }
+        foreach ($fields as $f) {
+            $name = (string) ($f['name'] ?? '');
+            if ($name === 'status' || $name === 'priority') {
+                $this->labels[$name] = self::choiceLabels((array) ($f['choices'] ?? [])) + $this->labels[$name];
+            }
+        }
+        return $this->labels;
+    }
+
+    /**
+     * Pure: {id: 2, value: "Open"} choices -> [2 => "Open"].
+     *
+     * @param array<mixed> $choices
+     * @return array<int,string>
+     */
+    public static function choiceLabels(array $choices): array
+    {
+        $out = [];
+        foreach ($choices as $ch) {
+            if (is_array($ch) && isset($ch['id'], $ch['value']) && is_numeric($ch['id']) && is_string($ch['value']) && trim($ch['value']) !== '') {
+                $out[(int) $ch['id']] = trim($ch['value']);
+            }
+        }
+        return $out;
     }
 
     public function getSourceKey(): string
@@ -92,7 +140,7 @@ final class FreshserviceAdapter implements SourceAdapterInterface
             $items[] = $isAgent ? self::agent($row) : self::requester($row);
         }
 
-        if ($r['link_next'] || count($rows) >= FreshserviceClient::PER_PAGE) {
+        if (self::more($r, count($rows))) {
             return new Page($items, true, $phase . ':' . ($page + 1));
         }
         if ($isAgent) {
@@ -143,7 +191,7 @@ final class FreshserviceAdapter implements SourceAdapterInterface
         foreach ($rows as $g) {
             $out[] = new ExternalGroup(self::SOURCE, (string) $g['id'], (string) $g['name'], $this->members($g), self::date($g['updated_at'] ?? null));
         }
-        return new Page($out, $r['link_next'] || count($rows) >= FreshserviceClient::PER_PAGE);
+        return new Page($out, self::more($r, count($rows)));
     }
 
     /**
@@ -257,14 +305,15 @@ final class FreshserviceAdapter implements SourceAdapterInterface
         ]);
         $rows  = $r['json']['tickets'] ?? [];
         $items = [];
+        $labels = $this->labels();
         foreach ($rows as $t) {
-            $items[] = self::ticket($t);
+            $items[] = self::ticket($t, $labels['status'], $labels['priority']);
         }
-        return new Page($items, $r['link_next'] || count($rows) >= FreshserviceClient::PER_PAGE);
+        return new Page($items, self::more($r, count($rows)));
     }
 
     /** @param array<string,mixed> $t */
-    public static function ticket(array $t): ExternalTicket
+    public static function ticket(array $t, array $statusLabels = self::STATUS, array $priorityLabels = self::PRIORITY): ExternalTicket
     {
         $path = array_values(array_filter([(string) ($t['category'] ?? ''), (string) ($t['sub_category'] ?? ''), (string) ($t['item_category'] ?? '')], static fn ($s) => $s !== ''));
         return new ExternalTicket(
@@ -272,8 +321,8 @@ final class FreshserviceAdapter implements SourceAdapterInterface
             (string) $t['id'],
             (string) ($t['subject'] ?? ''),
             (string) ($t['description'] ?? ($t['description_text'] ?? '')),
-            self::STATUS[(int) ($t['status'] ?? 0)] ?? 'Open',
-            self::PRIORITY[(int) ($t['priority'] ?? 0)] ?? 'Medium',
+            $statusLabels[(int) ($t['status'] ?? 0)] ?? self::STATUS[(int) ($t['status'] ?? 0)] ?? 'Open',
+            $priorityLabels[(int) ($t['priority'] ?? 0)] ?? self::PRIORITY[(int) ($t['priority'] ?? 0)] ?? 'Medium',
             (string) ($t['type'] ?? 'Incident'),
             isset($t['requester_id']) ? 'requester:' . $t['requester_id'] : null,
             isset($t['responder_id']) ? 'agent:' . $t['responder_id'] : null,
@@ -342,11 +391,12 @@ final class FreshserviceAdapter implements SourceAdapterInterface
             );
         }
 
-        $res = $main['resolution'] ?? null;
+        // Real Freshservice answers carry the resolution as resolution_notes_html / resolution_notes on the ticket
+        // (recorded 2026-11-18); the older guesses stay as fallbacks.
+        $res = $main['resolution_notes_html'] ?? $main['resolution_notes'] ?? $main['resolution'] ?? null;
         if (is_array($res)) {
             $res = $res['content'] ?? $res['body'] ?? null;
-        }
-        $stats = (array) ($main['stats'] ?? []);
+        }        $stats = (array) ($main['stats'] ?? []);
 
         return new TicketChildren(
             $notes,
@@ -373,7 +423,7 @@ final class FreshserviceAdapter implements SourceAdapterInterface
             $r    = $this->client->get($endpoint, ['per_page' => FreshserviceClient::PER_PAGE, 'page' => $page]);
             $rows = $r['json'][$key] ?? [];
             array_push($out, ...$rows);
-            $more = $r['link_next'] || count($rows) >= FreshserviceClient::PER_PAGE;
+            $more = self::more($r, count($rows));
             $page++;
         } while ($more && $page <= self::MAX_PAGE);
         return $out;
@@ -392,6 +442,21 @@ final class FreshserviceAdapter implements SourceAdapterInterface
             isset($a['content_type']) ? (string) $a['content_type'] : null,
             $noteSrcId
         );
+    }
+
+    /**
+     * Is there another page? `meta.has_more` (sub-lists answer with it) is authoritative when present;
+     * otherwise a Link header with rel="next", otherwise a full page. Pure.
+     *
+     * @param array{json: array<mixed>, link_next: bool} $r
+     */
+    public static function more(array $r, int $rows): bool
+    {
+        $meta = $r['json']['meta'] ?? null;
+        if (is_array($meta) && array_key_exists('has_more', $meta)) {
+            return (bool) $meta['has_more'];
+        }
+        return $r['link_next'] || $rows >= FreshserviceClient::PER_PAGE;
     }
 
     // -------------------------------------------------------------- helpers

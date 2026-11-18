@@ -1,0 +1,352 @@
+{
+    "ticket_fields": [
+        {
+            "id": 1034,
+            "description": "Text 7",
+            "field_type": "default_subject",
+            "position": 2,
+            "workspace_id": 1,
+            "name": "subject",
+            "default_field": true,
+            "customers_can_edit": true,
+            "label_for_customers": "value-9",
+            "required_for_customers": true,
+            "displayed_to_customers": true,
+            "belongs_to_section": false,
+            "choices": [],
+            "nested_fields": [],
+            "sections": [],
+            "label": "Label 2",
+            "created_at": "2019-05-03T07:16:04Z",
+            "updated_at": "2023-07-19T13:15:46Z",
+            "required_for_closure": false,
+            "required_for_agents": true,
+            "lookup_config": null
+        },
+        {
+            "id": 1052,
+            "description": "Text 9",
+            "field_type": "default_status",
+            "position": 9,
+            "workspace_id": 1,
+            "name": "status",
+            "default_field": true,
+            "customers_can_edit": false,
+            "label_for_customers": "value-16",
+            "required_for_customers": false,
+            "displayed_to_customers": true,
+            "belongs_to_section": false,
+            "choices": [
+                {
+                    "id": 2,
+                    "value": "Open",
+                    "requester_display_value": "Being Processed",
+                    "internal_id": 1053
+                },
+                {
+                    "id": 3,
+                    "value": "Pending",
+                    "requester_display_value": "Awaiting your Reply",
+                    "internal_id": 1054
+                },
+                {
+                    "id": 4,
+                    "value": "Resolved",
+                    "requester_display_value": "This ticket has been Resolved",
+                    "internal_id": 1055
+                },
+                {
+                    "id": 5,
+                    "value": "Closed",
+                    "requester_display_value": "This ticket has been Closed",
+                    "internal_id": 1056
+                },
+                {
+                    "id": 6,
+                    "value": "In Progress",
+                    "requester_display_value": "In Progress",
+                    "internal_id": 1057
+                },
+                {
+                    "id": 7,
+                    "value": "Waiting on Approval",
+                    "requester_display_value": "Waiting on Approval",
+                    "internal_id": 1058
+                }
+            ],
+            "nested_fields": [],
+            "sections": [],
+            "label": "Label 10",
+            "created_at": "2019-05-03T07:16:04Z",
+            "updated_at": "2023-07-19T13:15:46Z",
+            "required_for_closure": false,
+            "required_for_agents": true,
+            "lookup_config": null
+        },
+        {
+            "id": 1061,
+            "description": "Text 12",
+            "field_type": "default_priority",
+            "position": 12,
+            "workspace_id": 1,
+            "name": "priority",
+            "default_field": true,
+            "customers_can_edit": false,
+            "label_for_customers": "value-19",
+            "required_for_customers": false,
+            "displayed_to_customers": false,
+            "belongs_to_section": false,
+            "choices": [
+                {
+                    "id": 1,
+                    "value": "Low"
+                },
+                {
+                    "id": 2,
+                    "value": "Medium"
+                },
+                {
+                    "id": 3,
+                    "value": "High"
+                },
+                {
+                    "id": 4,
+                    "value": "Urgent"
+                }
+            ],
+            "nested_fields": [],
+            "sections": [],
+            "label": "Label 13",
+            "created_at": "2019-05-03T07:16:04Z",
+            "updated_at": "2023-07-19T13:15:46Z",
+            "required_for_closure": false,
+            "required_for_agents": true,
+            "lookup_config": null
+        },
+        {
+            "id": 1843,
+            "description": "Text 16",
+            "field_type": "default_description",
+            "position": 16,
+            "workspace_id": 1,
+            "name": "description",
+            "default_field": true,
+            "customers_can_edit": true,
+            "label_for_customers": "value-23",
+            "required_for_customers": true,
+            "displayed_to_customers": true,
+            "belongs_to_section": false,
+            "choices": [],
+            "nested_fields": [],
+            "sections": [],
+            "label": "Label 17",
+            "created_at": "2019-05-03T07:16:04Z",
+            "updated_at": "2023-07-19T13:15:46Z",
+            "required_for_closure": false,
+            "required_for_agents": true,
+            "lookup_config": null
+        },
+        {
+            "id": 1844,
+            "description": "Text 17",
+            "field_type": "default_category",
+            "position": 17,
+            "workspace_id": 1,
+            "name": "category",
+            "default_field": true,
+            "customers_can_edit": false,
+            "label_for_customers": "value-24",
+            "required_for_customers": false,
+            "displayed_to_customers": true,
+            "belongs_to_section": false,
+            "choices": [
+                {
+                    "id": 1845,
+                    "display_id": 1846,
+                    "value": "Choice 806",
+                    "nested_options": [
+                        {
+                            "id": 1847,
+                            "display_id": 1848,
+                            "value": "Choice 807",
+                            "nested_options": [
+                                {
+                                    "id": 1849,
+                                    "display_id": 1850,
+                                    "value": "Choice 808"
+                                },
+                                {
+                                    "id": 1851,
+                                    "display_id": 1852,
+                                    "value": "Choice 809"
+                                },
+                                {
+                                    "id": 1853,
+                                    "display_id": 1854,
+                                    "value": "Choice 810"
+                                }
+                            ]
+                        },
+                        {
+                            "id": 1887,
+                            "display_id": 1888,
+                            "value": "Choice 827",
+                            "nested_options": [
+                                {
+                                    "id": 1889,
+                                    "display_id": 1890,
+                                    "value": "Choice 828"
+                                },
+                                {
+                                    "id": 1891,
+                                    "display_id": 1892,
+                                    "value": "Choice 829"
+                                },
+                                {
+                                    "id": 1893,
+                                    "display_id": 1894,
+                                    "value": "Choice 830"
+                                }
+                            ]
+                        },
+                        {
+                            "id": 1977,
+                            "display_id": 1978,
+                            "value": "Choice 871",
+                            "nested_options": [
+                                {
+                                    "id": 1979,
+                                    "display_id": 1980,
+                                    "value": "Choice 872"
+                                },
+                                {
+                                    "id": 1981,
+                                    "display_id": 1982,
+                                    "value": "Choice 873"
+                                },
+                                {
+                                    "id": 1983,
+                                    "display_id": 1984,
+                                    "value": "Choice 874"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "id": 2047,
+                    "display_id": 2048,
+                    "value": "Choice 904",
+                    "nested_options": [
+                        {
+                            "id": 2049,
+                            "display_id": 2050,
+                            "value": "Choice 905",
+                            "nested_options": []
+                        },
+                        {
+                            "id": 2051,
+                            "display_id": 2052,
+                            "value": "Choice 906",
+                            "nested_options": []
+                        },
+                        {
+                            "id": 2053,
+                            "display_id": 2054,
+                            "value": "Choice 907",
+                            "nested_options": []
+                        }
+                    ]
+                },
+                {
+                    "id": 2055,
+                    "display_id": 2056,
+                    "value": "Choice 67",
+                    "nested_options": [
+                        {
+                            "id": 2057,
+                            "display_id": 2058,
+                            "value": "Choice 908",
+                            "nested_options": [
+                                {
+                                    "id": 2059,
+                                    "display_id": 2060,
+                                    "value": "Choice 909"
+                                },
+                                {
+                                    "id": 2061,
+                                    "display_id": 2062,
+                                    "value": "Choice 910"
+                                },
+                                {
+                                    "id": 2063,
+                                    "display_id": 2064,
+                                    "value": "Choice 911"
+                                }
+                            ]
+                        },
+                        {
+                            "id": 2075,
+                            "display_id": 2076,
+                            "value": "Choice 917",
+                            "nested_options": [
+                                {
+                                    "id": 2077,
+                                    "display_id": 2078,
+                                    "value": "Choice 918"
+                                },
+                                {
+                                    "id": 2079,
+                                    "display_id": 2080,
+                                    "value": "Choice 919"
+                                },
+                                {
+                                    "id": 2081,
+                                    "display_id": 2082,
+                                    "value": "Choice 844"
+                                }
+                            ]
+                        },
+                        {
+                            "id": 2101,
+                            "display_id": 2102,
+                            "value": "Choice 928",
+                            "nested_options": []
+                        }
+                    ]
+                }
+            ],
+            "nested_fields": [
+                {
+                    "name": "sub_category",
+                    "id": 2728,
+                    "label": "Label 18",
+                    "label_in_portal": "value-25",
+                    "level": 2,
+                    "description": "",
+                    "created_at": "2019-05-03T07:16:04Z",
+                    "updated_at": "2023-07-19T13:15:46Z",
+                    "field_id": 1844
+                },
+                {
+                    "name": "item_category",
+                    "id": 2729,
+                    "label": "Label 19",
+                    "label_in_portal": "value-26",
+                    "level": 3,
+                    "description": "",
+                    "created_at": "2019-05-03T07:16:04Z",
+                    "updated_at": "2023-07-19T13:15:46Z",
+                    "field_id": 1844
+                }
+            ],
+            "sections": [],
+            "label": "Label 20",
+            "created_at": "2019-05-03T07:16:04Z",
+            "updated_at": "2024-12-19T02:59:08Z",
+            "required_for_closure": false,
+            "required_for_agents": true,
+            "lookup_config": null
+        }
+    ]
+}

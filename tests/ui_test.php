@@ -49,6 +49,10 @@ check('web run: the step is refused unless the run is a running web run of this 
 $v = (string) file_get_contents(ITSM_ROOT . '/src/RunView.php');
 check('run page: the form never carries the api key', stripos($v, 'api_key') === false);
 check('run page: sends the CSRF header, not a body token', str_contains($v, "'X-Glpi-Csrf-Token'") && str_contains($v, "'X-Requested-With'"));
+check('ajax: collects and discards anything printed while a batch runs (debug-mode warnings must not precede the JSON)', str_contains($a, 'ob_start()') && str_contains($a, 'ob_end_clean()'));
+check('run page: a non-JSON answer is reported readably, and the run is stopped (lock released)', str_contains($v, 'did not answer JSON') && str_contains($v, "action: 'abort'"));
+$rc = (string) file_get_contents(ITSM_ROOT . '/src/Console/RunCommand.php');
+check('run command: --username is required and loads that user\'s session (the CLI has no session of its own)', str_contains($rc, "addOption('username'") && str_contains($rc, 'loadUserSession') && str_contains($rc, '--username is required'));
 $t = (string) file_get_contents(ITSM_ROOT . '/src/Tab/ExternalReferenceTab.php');
 check('tab: reads only id/name/adapter/base_url of a source, never the key', str_contains($t, "'SELECT' => ['id', 'name', 'adapter', 'base_url']") && stripos($t, 'api_key') === false);
 check('tab: external links open with noopener', str_contains($t, 'noopener noreferrer'));

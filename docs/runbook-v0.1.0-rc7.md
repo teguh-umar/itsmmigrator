@@ -1,4 +1,4 @@
-# Runbook: itsmmigrator (ITSM Migrator) 0.1.0-rc6
+# Runbook: itsmmigrator (ITSM Migrator) 0.1.0-rc7
 
 Run these steps in order. Every step says what a good result looks like. Stop at the first step that does not match and send the output back; do not skip ahead.
 
@@ -13,11 +13,11 @@ Facts used throughout:
 
 ## 0. Put the build in place
 
-Unpack `itsmmigratorv0.1.0-rc6.zip` so the folder is `<glpi>/plugins/itsmmigrator/` (the archive root is already `itsmmigrator/`), owned by the web-server user.
+Unpack `itsmmigratorv0.1.0-rc7.zip` so the folder is `<glpi>/plugins/itsmmigrator/` (the archive root is already `itsmmigrator/`), owned by the web-server user.
 
 ```bash
 cd <glpi>/plugins
-sudo unzip -o ~/itsmmigratorv0.1.0-rc6.zip
+sudo unzip -o ~/itsmmigratorv0.1.0-rc7.zip
 sudo chown -R <webuser>:<webuser> <glpi>/plugins/itsmmigrator
 ls <glpi>/plugins/itsmmigrator/setup.php
 ```
@@ -38,7 +38,7 @@ sudo -u <webuser> php bin/console plugin:list | grep -i itsmmigrator
 sudo -u <webuser> php bin/console cache:clear
 ```
 
-Good: install and activate report success; `plugin:list` shows `0.1.0-rc6` and `Enabled`. Clear the cache before opening any page of the plugin. Then log out and in again: GLPI reads profile rights and builds the menu at login, so ICT Tools > ITSM Migrator does not appear in an older session.
+Good: install and activate report success; `plugin:list` shows `0.1.0-rc7` and `Enabled`. Clear the cache before opening any page of the plugin. Then log out and in again: GLPI reads profile rights and builds the menu at login, so ICT Tools > ITSM Migrator does not appear in an older session.
 
 Check the three tables, the rights and the cron task:
 
@@ -66,6 +66,8 @@ Good: the source appears in the list. The key is never shown again; leaving the 
 cd <glpi>
 sudo -u <webuser> php bin/console plugins:itsmmigrator:run --source=<id> --username=<glpi-login> --dry-run --limit=50
 ```
+
+Run it as a real GLPI user: `--username=<glpi login>` is required (the CLI has no session of its own, and that user's profile decides which entities can be written to). `UNMAPPED status "..."` lines mean the account uses a status wording the defaults do not know (Freshservice accounts add their own, for example "Waiting on Approval"): a best guess is used and shown; set the real mapping in the source's status map (JSON, label to GLPI status) before the real run.
 
 Good: it prints `Run <n> on source ...`, one block per module, and a counter table. A bad key or an unreachable host stops at "Connection test failed" before anything else happens. A dry run writes nothing (no GLPI items, no map rows) and does not fetch ticket children.
 

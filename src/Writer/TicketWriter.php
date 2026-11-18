@@ -76,7 +76,8 @@ final class TicketWriter
 
             if ($ctx->dryRun()) {
                 $ctx->counters->add($mod, $ticketId > 0 ? 'matched' : 'created');
-                $ctx->log(sprintf('[dry] ticket %s "%s": would %s', $t->srcId, $t->subject, $ticketId > 0 ? 'reuse GLPI ticket ' . $ticketId : 'create'));
+                $this->warnUnmapped($t, $ctx);
+                $ctx->log(sprintf('[dry] ticket %s: would %s', $t->srcId, $ticketId > 0 ? 'reuse GLPI ticket ' . $ticketId : 'create'));
                 return $ticketId > 0 ? 'matched' : 'created';
             }
 
@@ -107,6 +108,29 @@ final class TicketWriter
             $ctx->counters->add($mod, 'failed');
             $ctx->log(sprintf('ticket %s FAILED: %s', $t->srcId, $e->getMessage()));
             return 'failed';
+        }
+    }
+
+    /** @var array<string,true> labels already reported in this run */
+    private array $warned = [];
+
+    /**
+     * Report a status, priority or type label that neither the source's maps nor the defaults know, once per
+     * label per run (a dry run is where an administrator needs to see them, before anything is written).
+     */
+    private function warnUnmapped(ExternalTicket $t, Context $ctx): void
+    {
+        $checks = [
+            ['status', $t->status, Mapping::status($t->status, $t->assigneeSrcId !== null, $this->jsonOpt($ctx, 'status_map'))],
+            ['priority', $t->priority, Mapping::priority($t->priority, $this->jsonOpt($ctx, 'priority_map'))],
+            ['type', $t->type, Mapping::type($t->type, $this->jsonOpt($ctx, 'type_map'))],
+        ];
+        foreach ($checks as [$what, $label, $m]) {
+            $key = $what . '|' . $label;
+            if (!$m['known'] && !isset($this->warned[$key])) {
+                $this->warned[$key] = true;
+                $ctx->log(sprintf('UNMAPPED %s "%s": a best guess is used (GLPI value %d); set it in the source\'s %s_map', $what, $label, $m['value'], $what));
+            }
         }
     }
 

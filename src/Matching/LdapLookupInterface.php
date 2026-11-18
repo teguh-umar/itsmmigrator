@@ -11,8 +11,11 @@ interface LdapLookupInterface
     /**
      * @param list<string> $emails normalized source e-mails
      * @param string       $login  normalized source login ('' when the source has none)
+     * @param bool         $dryRun a dry run only SEARCHES: nothing is imported, nothing is written
      * @return array{users_id: int, imported: bool}|null the GLPI user (existing or just imported), null when the
-     *         directory does not know the person or no directory could be queried
+     *         directory does not know the person or no directory could be queried. In a dry run a person who
+     *         is in the directory but not yet a GLPI user comes back as ['users_id' => 0, 'imported' => true]
+     *         ("would import").
      */
-    public function findAndImport(array $emails, string $login): ?array;
+    public function findAndImport(array $emails, string $login, bool $dryRun = false): ?array;
 }
