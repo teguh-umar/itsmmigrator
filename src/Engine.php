@@ -282,7 +282,8 @@ final class Engine
      */
     public static function watermarkToWrite(?string $current, array $pos, string $status, array $flags): ?string
     {
-        if (!empty($flags['dry_run']) || (int) ($flags['limit'] ?? 0) > 0) {
+        // A dry run, a --limit run and a category-filtered run have not seen every ticket: nothing may move.
+        if (!empty($flags['dry_run']) || (int) ($flags['limit'] ?? 0) > 0 || !empty($flags['category_filter'])) {
             return null;
         }
         if (!in_array($status, ['success', 'partial'], true) || empty($pos['tickets_complete']) || empty($pos['max_updated'])) {
@@ -311,6 +312,7 @@ final class Engine
     public static function advanceWatermark(array $source, array $pos, string $status, array $flags, callable $log): void
     {
         global $DB;
+        $flags['category_filter'] = (new Context($source, self::decodeOptions($source), $flags, new Counters()))->categoryFilter() !== [];
         $new = self::watermarkToWrite(isset($source['watermark']) ? (string) $source['watermark'] : null, $pos, $status, $flags);
         if ($new === null) {
             return;

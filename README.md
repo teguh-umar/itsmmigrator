@@ -5,7 +5,7 @@ A GLPI 11 plugin that brings data from an external ITSM tool into GLPI, with GLP
 - **Freshservice (API v2):** a one-time import of the history, before Freshservice is taken down.
 - **ManageEngine ServiceDesk Plus on-premises (REST API v3):** an initial import plus a weekly delta sync. *Not built yet (M4).*
 
-Status: release candidate `0.1.0-rc7`. See `CHANGELOG.md` for what each build contains and for the open items.
+Status: release candidate `0.1.0-rc8`. See `CHANGELOG.md` for what each build contains and for the open items.
 
 ## What it guarantees
 
@@ -18,6 +18,7 @@ Status: release candidate `0.1.0-rc7`. See `CHANGELOG.md` for what each build co
 | Existing users are never sent to the LDAP import | GLPI's import call re-activates an inactive user. The lookup searches read-only and imports only a person who is not yet a GLPI user. A **dry run never imports**; a directory that cannot be bound or searched is switched off for the run and its warnings (which carry base DNs and e-mail addresses) are swallowed, not logged and not shown. |
 | Existing groups and categories are matched | What the target entity can already see (its own rows plus recursive rows of ancestor entities), nearest entity first. |
 | A delta, not a re-read | The source keeps a **watermark**: the newest `updated_at` of the last complete, successful run. The next run reads from the watermark minus 2 hours. It moves only after a real run that read the whole ticket list (not a dry run, not `--limit`) and ended success or partial; a fetch error leaves it alone; it never moves back. `--full`, `--retry-failed` and `--recreate-missing` read everything; `--since` wins over all. |
+| An early-phase scope | **Import only chosen ticket categories**: one path per line in the source form (`Hardware`, `Hardware > Laptop`; a path includes everything below it), or `--category="Hardware > Laptop"` (repeatable) on the CLI. Tickets of other categories are left out and get no map row, so widening the list later imports them; the category tree is created only for the chosen branches and their parents; a filtered run never moves the watermark. |
 | Re-runnable | Resume (`in_progress`), `--retry-failed`, `--recreate-missing`. A second run with no source change changes nothing. |
 | Tables survive uninstall | Dropping the maps would make a reinstall import everything again. Only `plugins:itsmmigrator:purge --confirm` drops them. |
 
@@ -78,4 +79,4 @@ The offline suites need the `mbstring` extension. The staging tools create throw
 
 ## Documentation
 
-The user manual is written by Copilot (hub §0 rule 9). The step-by-step deployment is `docs/runbook-v0.1.0-rc7.md`.
+The user manual is written by Copilot (hub §0 rule 9). The step-by-step deployment is `docs/runbook-v0.1.0-rc8.md`.

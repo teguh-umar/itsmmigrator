@@ -1,4 +1,9 @@
 # Changelog
+## 0.1.0-rc8
+
+- **Import only chosen ticket categories (early-phase scope).** The source form has a box "Import only these ticket categories" (one path per line, `Hardware` or `Hardware > Laptop`, case and spacing ignored, a path includes everything below it), stored in the source options as `ticket_categories`; `plugins:itsmmigrator:run --category="..."` (repeatable) overrides it for one run. A ticket outside the list is skipped **before any map lookup or write**: no map row, no GLPI ticket, so widening the list later imports it. A ticket with no category is left out while a filter is on. The category module creates only the chosen branches and their parents. **A filtered run never moves the watermark** (it has not seen every ticket). Tested offline (21 checks) and on staging 2 (flag, source option, widening, category tree, watermark).
+- Why a run shows many "skipped" users: a source user that matches no GLPI user (by e-mail, login, then the directory) is skipped when `--create-missing-users` is off; their tickets then use `--fallback-user`. It is a count, not an error.
+
 
 ## 0.1.0-rc7
 

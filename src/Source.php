@@ -153,7 +153,7 @@ class Source extends CommonDBTM
      * @param callable(string):string $encrypt
      * @return array<string,mixed>
      */
-    public static function prepare(array $input, callable $encrypt): array
+    public static function prepare(array $input, callable $encrypt, array $stored = []): array
     {
         // A source is never recursive, whatever the form posted.
         unset($input['is_recursive']);
@@ -170,6 +170,19 @@ class Source extends CommonDBTM
             if (array_key_exists($json, $input) && trim((string) $input[$json]) === '') {
                 $input[$json] = null;
             }
+        }
+        // "Import only these categories": one path per line in the form, kept in the options JSON.
+        if (array_key_exists('ticket_categories_text', $input)) {
+            $options = json_decode((string) ($input['options'] ?? $stored['options'] ?? ''), true);
+            $options = is_array($options) ? $options : [];
+            $lines = array_values(array_filter(array_map('trim', preg_split('/\R/', (string) $input['ticket_categories_text']) ?: []), static fn (string $l): bool => $l !== ''));
+            if ($lines === []) {
+                unset($options['ticket_categories']);
+            } else {
+                $options['ticket_categories'] = $lines;
+            }
+            $input['options'] = $options === [] ? null : json_encode($options, JSON_UNESCAPED_UNICODE);
+            unset($input['ticket_categories_text']);
         }
         if (array_key_exists('base_url', $input)) {
             $input['base_url'] = rtrim(trim((string) $input['base_url']), '/');
@@ -223,7 +236,7 @@ class Source extends CommonDBTM
     {
         $adapter = (string) ($input['adapter'] ?? $this->fields['adapter'] ?? '');
         $others  = self::otherActiveOnAdapter($adapter, (int) ($this->fields['id'] ?? 0));
-        return $this->refuse(self::errors($input, $this->fields, $others)) ? false : self::prepare($input, self::encrypter());
+        return $this->refuse(self::errors($input, $this->fields, $others)) ? false : self::prepare($input, self::encrypter(), $this->fields);
     }
 
     /** The only place a stored key is decrypted. */
@@ -280,6 +293,11 @@ class Source extends CommonDBTM
         \Entity::dropdown(['name' => 'entities_id', 'value' => (int) $f['entities_id'], 'entity' => -1, 'readonly' => !$canedit, 'rand' => 'itsmsrc']);
         echo '</div>';
 
+        $opts = json_decode((string) ($f['options'] ?? ''), true);
+        $catsText = is_array($opts) && is_array($opts['ticket_categories'] ?? null) ? implode("\n", array_map('strval', $opts['ticket_categories'])) : '';
+        echo '<div class="mb-2"><label class="form-label" for="itsmmigrator-src-cats">' . __s('Import only these ticket categories', 'itsmmigrator') . '</label>';
+        echo '<textarea class="form-control" rows="3" id="itsmmigrator-src-cats" name="ticket_categories_text" placeholder="' . htmlescape(__('One category path per line, e.g. Hardware > Laptop. Empty = all categories.', 'itsmmigrator')) . '"' . $dis . '>' . htmlescape($catsText) . '</textarea>';
+        echo '<div class="form-text">' . __s('A path includes everything below it. Tickets of other categories are left out (and are picked up later if you widen this list).', 'itsmmigrator') . '</div></div>';
         echo '<div class="mb-3"><label class="form-label" for="itsmmigrator-src-schedule">' . __s('Schedule', 'itsmmigrator') . '</label>';
         echo '<select class="form-select" id="itsmmigrator-src-schedule" name="schedule"' . $dis . '>';
         foreach (self::SCHEDULES as $s) {
