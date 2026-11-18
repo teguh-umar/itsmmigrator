@@ -213,7 +213,7 @@ final class Engine
             Lock::release($runId, $status, $counters->all(), $message);
         }
 
-        return ['run_id' => $runId, 'status' => $status, 'counters' => $counters->all()];
+        return ['run_id' => $runId, 'status' => $status, 'counters' => $counters->all(), 'details' => $counters->details()];
     }
 
     /** @param array<string,mixed> $source @return array<string,mixed> */

@@ -67,4 +67,7 @@ check('never when the tickets module did not finish', Engine::watermarkToWrite(n
 check('never when no ticket was seen', Engine::watermarkToWrite(null, ['tickets_complete' => true], 'success', []) === null);
 check('never backwards', Engine::watermarkToWrite('2024-03-20 00:00:00', $pos, 'success', []) === null && Engine::watermarkToWrite('2024-03-12 10:00:00', $pos, 'success', []) === null);
 
+$cd = new Counters(); $cd->detail('users', 'matched_by_email', 2); $cd->detail('users', 'skipped_no_match');
+check('counter details: kept apart from the main counters, never user data', $cd->details() === ['users' => ['matched_by_email' => 2, 'skipped_no_match' => 1]] && $cd->all() === []);
+check('the engine result carries the details, the CLI prints them', str_contains((string) file_get_contents(ITSM_ROOT . '/src/Engine.php'), "'details' => \$counters->details()") && str_contains((string) file_get_contents(ITSM_ROOT . '/src/Console/RunCommand.php'), 'detail: '));
 done();

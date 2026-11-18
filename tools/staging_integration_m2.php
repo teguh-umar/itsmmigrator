@@ -273,6 +273,10 @@ $calls = count($stub->calls);
 chk('ldap: a second run asks the directory for nobody (all mapped)', count($stub->calls) === $calls);
 (new Engine(new FakeAdapter(['users' => [[new ExternalUser('freshservice', 'l4', 'Skipped by flag', [], "$tag.fromldap")]]]), new GlpiPlugin\Itsmmigrator\Writer\UserWriter($stub)))->run($source, 'cli', ['users'], ['ldap_lookup' => false], $logger);
 chk('ldap: --no-ldap-lookup never calls the directory', count($stub->calls) === $calls);
+$resD = (new Engine(new FakeAdapter(['users' => [[new ExternalUser('freshservice', 'd1', 'Dry A', [], "$tag.fromldap"), new ExternalUser('freshservice', 'd2', 'Dry B', ["$tag.ann@example.test"]), new ExternalUser('freshservice', 'd3', 'Dry C', ["$tag.nobody2@example.test"], "$tag.nobody2")]]]), new GlpiPlugin\Itsmmigrator\Writer\UserWriter($stub)))->run($source, 'cli', ['users'], ['dry_run' => true], $logger);
+$dt = $resD['details']['users'] ?? [];
+chk('details: a dry run reports HOW users matched (email), what the directory would import, and what stays skipped', ($dt['matched_by_email'] ?? 0) === 1 && ($dt['directory_would_import'] ?? 0) === 1 && ($dt['skipped_no_match'] ?? 0) === 1, json_encode($dt));
+chk('details: the dry run imported nobody and wrote no map row for them', countElementsInTable('glpi_plugin_itsmmigrator_maps', ['sources_id' => $sid, 'src_id' => ['d1', 'd2', 'd3']]) === 0);
 
 // the real lookup against staging directories (bind passwords are blank there): must degrade to "not found", never throw
 $real = new GlpiPlugin\Itsmmigrator\Matching\GlpiLdapLookup(function (string $m) use (&$log) { $log[] = $m; });

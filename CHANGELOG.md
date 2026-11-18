@@ -1,4 +1,8 @@
 # Changelog
+## 0.1.0-rc10
+
+- **The run now says HOW users were matched.** Besides the main counters, `plugins:itsmmigrator:run` prints a detail line for users: `matched_by_email`, `matched_by_login`, `matched_by_directory_existing_user` (the directory knows the person and they already are a GLPI user), `directory_would_import` (dry run) or `directory_imported` (real run), and `skipped_no_match`. Counts only, never a name or an address. Tested on staging 2 (a dry run reports email 1, would-import 1, skipped 1, imports nobody and writes no map row).
+
 ## 0.1.0-rc9
 
 - **Category picker on the source form.** On a saved source, "Show the categories of this source" lists the source's category tree (one read-only GET of the form listing: paths only, no ticket, no user, no counts), with a filter box; clicking a path adds it to "Import only these ticket categories". The list goes to the logged-in administrator's page and nowhere else: `ajax/categories.php` is POST only, needs the config right with Update (it uses the stored key), is CSRF-checked by GLPI on the header, discards anything printed, writes nothing and logs nothing. Checked over HTTP on staging 2 against the real source: 442 paths, 3 levels, 3 s, nothing written, no key in any answer; GET 405, no CSRF header 403.

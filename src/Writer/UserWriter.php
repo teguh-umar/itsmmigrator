@@ -72,6 +72,7 @@ final class UserWriter
             }
 
             if ($verdict['outcome'] === UserMatcher::MATCHED) {
+                $ctx->counters->detail($mod, $emailHits !== [] ? 'matched_by_email' : 'matched_by_login');
                 return $this->matched($u, $ctx, $existing, (int) $verdict['users_id'], 'matched');
             }
 
@@ -85,6 +86,7 @@ final class UserWriter
                 } else {
                     $found = $this->ldap->findAndImport($emails, $login, $ctx->dryRun());
                     if ($found !== null) {
+                        $ctx->counters->detail($mod, $found['users_id'] > 0 && !$found['imported'] ? 'matched_by_directory_existing_user' : ($ctx->dryRun() ? 'directory_would_import' : 'directory_imported'));
                         if ($found['imported'] && !$ctx->dryRun()) {
                             // A user the plugin brought in from the directory: same leak guard as a created user.
                             $this->removeProfilesOutsideTarget($found['users_id'], $ctx->targetEntity());
@@ -105,6 +107,7 @@ final class UserWriter
             if ($rowId > 0) {
                 MapRepository::markSkipped($rowId, 'no GLPI user matches and creation is off');
             }
+            $ctx->counters->detail($mod, 'skipped_no_match');
             $ctx->counters->add($mod, 'skipped');
             return 'skipped';
         } catch (\Throwable $e) {
