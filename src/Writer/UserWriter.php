@@ -85,7 +85,12 @@ final class UserWriter
                 } else {
                     $found = $this->ldap->findAndImport($emails, $login);
                     if ($found !== null) {
-                        return $this->matched($u, $ctx, $existing, $found, 'matched');
+                        if ($found['imported'] && !$ctx->dryRun()) {
+                            // A user the plugin brought in from the directory: same leak guard as a created user.
+                            $this->removeProfilesOutsideTarget($found['users_id'], $ctx->targetEntity());
+                            $ctx->log(sprintf('user %s imported from LDAP as GLPI user %d', $u->srcId, $found['users_id']));
+                        }
+                        return $this->matched($u, $ctx, $existing, $found['users_id'], 'matched');
                     }
                 }
             }
