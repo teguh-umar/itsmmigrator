@@ -50,4 +50,5 @@ check('CategoryWriter honours the filter', str_contains($cw, 'CategoryFilter::al
 $en = (string) file_get_contents(ITSM_ROOT . '/src/Engine.php');
 check('a filtered run never moves the watermark', str_contains($en, "!empty(\$flags['category_filter'])"));
 
+check('filter: the user may type "&" or "&amp;" and the ticket may carry either', F::allowsTicket(F::parse('Network &amp; WAN'), ['Network & WAN']) && F::allowsTicket(F::parse('Network & WAN'), ['network & wan', 'Switch']));
 done();

@@ -35,7 +35,7 @@ final class CategoryFilter
     {
         $levels = [];
         foreach (explode('>', $path) as $l) {
-            $l = mb_strtolower(trim(preg_replace('/\s+/u', ' ', $l) ?? ''));
+            $l = mb_strtolower(trim(preg_replace('/\s+/u', ' ', html_entity_decode($l, ENT_QUOTES | ENT_HTML5, 'UTF-8')) ?? ''));
             if ($l !== '') {
                 $levels[] = $l;
             }
