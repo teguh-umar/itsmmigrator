@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0-rc4
+
+- **M7: `plugins:itsmmigrator:verify` works.** Read-only (a test pins that the `Verifier` never writes). It runs nine checks and exits 1 when anything is found, 0 when clean; `--source=<id>` limits it to one source. The checks: mapped GLPI items that are missing, in the trash, or (when the plugin created them) moved out of the target entity; map rows still `in_progress`, `needs_review` or `failed`; GLPI users that share an e-mail address (ids only, never the address); groups or categories the plugin created although a same-named visible one exists in a parent entity; the same `[FS#id]` / `[SDP#id]` on more than one ticket in an entity; several GLPI tickets for one `origin_ref`; a document linked twice to one ticket or one file stored twice in an entity; created items outside the target entity or recursive, and created users holding a profile outside it; sync-owned tickets modified after their last sync (nothing to find until the SDP adapter exists).
+- A matched or linked item that lives in another entity is correctly **not** reported: only what the plugin created must stay in the target entity.
+- **README.md and `docs/runbook-v0.1.0-rc4.md`** (deployment steps in order, each with its good result). They record that GLPI 11 only loads plugin commands named `plugins:<key>:<name>` (so `plugins:itsmmigrator:run|verify|purge`, not the `itsmmigrator:*` of spec §10), the rollout order, that existing users are never sent to the LDAP import, and the rule that actors are added after `Ticket::add`. Tests pin that neither document shows a bare `itsmmigrator:<command>` and that the runbook version matches `setup.php`.
+- `tools/staging_integration_m7.php`: seeds one deliberate defect per check on staging 2 and asserts `verify` finds each one (20 checks), also that a clean source is clean, that a matched item elsewhere is not reported, and that `verify` writes nothing and is repeatable.
+- **Open items (unchanged).** Freshservice field names, the category choices shape, `resolution` and `stats` are from the documentation and unchecked against real data; no LDAP test against a bound directory; the source watermark is not advanced; Freshservice group membership is not read; ServiceDesk Plus, the Run page, the Needs review picker and the External references tab are not built.
+
 ## 0.1.0-rc3
 
 - **M3: Freshservice import (tickets) and the CLI that drives it.** Built against fixtures written from the Freshservice API v2 documentation and tested on staging 2 with a fake adapter. **Nothing has run against a real Freshservice account yet** (open items below).
