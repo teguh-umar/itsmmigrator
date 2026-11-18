@@ -298,6 +298,18 @@ class Source extends CommonDBTM
         echo '<div class="mb-2"><label class="form-label" for="itsmmigrator-src-cats">' . __s('Import only these ticket categories', 'itsmmigrator') . '</label>';
         echo '<textarea class="form-control" rows="3" id="itsmmigrator-src-cats" name="ticket_categories_text" placeholder="' . htmlescape(__('One category path per line, e.g. Hardware > Laptop. Empty = all categories.', 'itsmmigrator')) . '"' . $dis . '>' . htmlescape($catsText) . '</textarea>';
         echo '<div class="form-text">' . __s('A path includes everything below it. Tickets of other categories are left out (and are picked up later if you widen this list).', 'itsmmigrator') . '</div></div>';
+        // Read-only picker: lists the source's category paths (one GET, nothing stored or logged) so the paths can be chosen, not typed.
+        if ($ID > 0 && $canedit) {
+            echo '<div class="mb-3" id="itsm-cat-picker">';
+            echo '<button type="button" class="btn btn-sm btn-outline-secondary" id="itsm-cat-load"><i class="ti ti-list-tree me-1"></i>' . __s('Show the categories of this source', 'itsmmigrator') . '</button>';
+            echo '<div id="itsm-cat-box" class="mt-2" style="display:none"><input type="search" class="form-control form-control-sm mb-2" id="itsm-cat-filter" placeholder="' . htmlescape(__('Filter...', 'itsmmigrator')) . '">';
+            echo '<div id="itsm-cat-list" class="border rounded p-2" style="max-height:18rem;overflow:auto"></div>';
+            echo '<div class="form-text">' . __s('Click a category to add it to the list above. Only paths are shown; nothing is saved until you press Save.', 'itsmmigrator') . '</div></div>';
+            echo '<div id="itsm-cat-msg" class="form-text text-danger"></div></div>';
+            echo Html::scriptBlock(self::pickerScript($ID));
+        } elseif ($ID === 0) {
+            echo '<div class="form-text mb-3">' . __s('Save the source first: then its categories can be listed here.', 'itsmmigrator') . '</div>';
+        }
         echo '<div class="mb-3"><label class="form-label" for="itsmmigrator-src-schedule">' . __s('Schedule', 'itsmmigrator') . '</label>';
         echo '<select class="form-select" id="itsmmigrator-src-schedule" name="schedule"' . $dis . '>';
         foreach (self::SCHEDULES as $s) {
@@ -322,5 +334,44 @@ class Source extends CommonDBTM
         Html::closeForm();
         echo '</div></div>';
         return true;
+    }
+
+    /** The picker's script: one POST to ajax/categories.php, then a filterable list; a click appends the path. */
+    private static function pickerScript(int $id): string
+    {
+        $url = json_encode('/plugins/itsmmigrator/ajax/categories.php');
+        $sid = (int) $id;
+        return <<<JS
+(function () {
+    const btn = document.getElementById('itsm-cat-load'), box = document.getElementById('itsm-cat-box'), list = document.getElementById('itsm-cat-list'),
+          filter = document.getElementById('itsm-cat-filter'), msg = document.getElementById('itsm-cat-msg'), area = document.getElementById('itsmmigrator-src-cats');
+    if (!btn || !area) { return; }
+    let paths = [];
+    function token() { const m = document.querySelector('meta[property="glpi:csrf_token"]'); return m ? m.getAttribute('content') : ''; }
+    function chosen() { return area.value.split(/\\r?\\n/).map(s => s.trim().toLowerCase()); }
+    function render() {
+        const q = filter.value.trim().toLowerCase(), have = chosen();
+        list.textContent = '';
+        paths.filter(p => !q || p.toLowerCase().includes(q)).slice(0, 400).forEach(p => {
+            const depth = p.split(' > ').length - 1, row = document.createElement('div');
+            row.style.cssText = 'cursor:pointer;padding:1px 0;padding-left:' + (depth * 1.1) + 'rem';
+            row.textContent = (have.includes(p.toLowerCase()) ? '\\u2713 ' : '') + p.split(' > ').pop();
+            row.title = p;
+            row.addEventListener('click', () => { if (!have.includes(p.toLowerCase())) { area.value = (area.value.trim() ? area.value.replace(/\\s+$/, '') + '\\n' : '') + p; } render(); });
+            list.appendChild(row);
+        });
+    }
+    btn.addEventListener('click', function () {
+        msg.textContent = ''; btn.disabled = true;
+        fetch({$url}, { method: 'POST', credentials: 'same-origin', body: new URLSearchParams({ sources_id: '{$sid}' }),
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-Glpi-Csrf-Token': token() } })
+            .then(r => r.text().then(t => { try { return JSON.parse(t); } catch (e) { throw new Error('HTTP ' + r.status + ': not JSON'); } }))
+            .then(r => { if (!r.success) { throw new Error(r.message || 'failed'); } paths = r.paths || []; box.style.display = ''; render(); if (r.truncated) { msg.textContent = 'The list is long: only the first part is shown, use the filter.'; } })
+            .catch(e => { msg.textContent = e.message; })
+            .finally(() => { btn.disabled = false; });
+    });
+    filter.addEventListener('input', render);
+})();
+JS;
     }
 }
