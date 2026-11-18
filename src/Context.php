@@ -70,6 +70,17 @@ final class Context
         ];
     }
 
+    /**
+     * The category filter of this run: the CLI/web flag wins over the source option. Empty = no filter.
+     *
+     * @return list<list<string>>
+     */
+    public function categoryFilter(): array
+    {
+        $flag = CategoryFilter::parse($this->flags['categories'] ?? null);
+        return $flag !== [] ? $flag : CategoryFilter::parse($this->options['ticket_categories'] ?? null);
+    }
+
     public function log(string $message): void
     {
         ($this->logger)($message);

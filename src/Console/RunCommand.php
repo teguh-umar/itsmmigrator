@@ -32,6 +32,7 @@ class RunCommand extends AbstractCommand
 
         $this->addOption('username', 'u', InputOption::VALUE_REQUIRED, 'GLPI login to run as (required): rules and entity checks need a session');
         $this->addOption('source', null, InputOption::VALUE_REQUIRED, 'Source id or name (required)');
+        $this->addOption('category', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Import only tickets under this category path, e.g. "Hardware > Laptop" (repeatable; overrides the source option)');
         $this->addOption('modules', null, InputOption::VALUE_REQUIRED, 'Comma list of: ' . implode(',', Engine::MODULES) . ' (default: all supported)');
         $this->addOption('since', null, InputOption::VALUE_REQUIRED, 'ISO8601 start for tickets; default: the source watermark minus 2 hours, or everything without one');
         $this->addOption('full', null, InputOption::VALUE_NONE, 'Read every ticket: ignore the source watermark');
@@ -112,6 +113,7 @@ class RunCommand extends AbstractCommand
             'assign_profiles'        => $profiles,
             'limit'                  => (int) ($input->getOption('limit') ?? 0),
             'since'                  => $input->getOption('since'),
+            'categories'             => (array) $input->getOption('category'),
         ];
         $modules = $input->getOption('modules') !== null ? explode(',', (string) $input->getOption('modules')) : [];
 

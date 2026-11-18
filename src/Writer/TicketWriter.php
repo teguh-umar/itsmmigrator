@@ -9,6 +9,7 @@ use GlpiPlugin\Itsmmigrator\Adapter\Dto\ExternalTicket;
 use GlpiPlugin\Itsmmigrator\Adapter\Dto\ExternalWorklog;
 use GlpiPlugin\Itsmmigrator\Adapter\Dto\TicketChildren;
 use GlpiPlugin\Itsmmigrator\Adapter\SourceAdapterInterface;
+use GlpiPlugin\Itsmmigrator\CategoryFilter;
 use GlpiPlugin\Itsmmigrator\Context;
 use GlpiPlugin\Itsmmigrator\MapRepository;
 use GlpiPlugin\Itsmmigrator\Mapping;
@@ -36,6 +37,12 @@ final class TicketWriter
         $mod      = 'tickets';
         $this->adapterRef = $adapter;
         $prefix   = $t->source === 'freshservice' ? 'FS' : 'SDP';
+        // Early-phase scope: only the chosen categories. A ticket left out gets NO map row, so widening the filter later picks it up.
+        if (!CategoryFilter::allowsTicket($ctx->categoryFilter(), $t->categoryPath)) {
+            $ctx->counters->add($mod, 'skipped');
+            return 'skipped';
+        }
+
         $existing = MapRepository::find($t->source, 'ticket', $t->srcId);
         $decision = MapRepository::decide($existing, $ctx->decideOptions());
         if ($decision === 'skip') {

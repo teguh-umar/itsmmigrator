@@ -206,6 +206,29 @@ $older = (new ExternalTicket('freshservice', "$tag-3004", "$tag old", '<p>b</p>'
 $adapter->tickets = [$older];
 (new Engine($adapter))->run($fresh(), 'cli', ['tickets'], ['full' => true], $logger);
 chk('watermark: it never moves backwards', $wm() === $before);
+// ---- early-phase scope: only the chosen categories
+$DB->update('glpi_plugin_itsmmigrator_sources', ['watermark' => null], ['id' => $sid]);
+$mkOut = fn (string $id) => new ExternalTicket('freshservice', $id, "$tag out $id", '<p>b</p>', 'Open', 'Medium', 'Incident', null, null, null, ["$tag-Other"], $d('2024-03-01T00:00:00Z'), null, $id, $d('2030-01-01T00:00:00Z'));
+$adapter->tickets = [$mk("$tag-5001", 'Open'), $mkOut("$tag-5002")];
+$res = (new Engine($adapter))->run($fresh(), 'cli', ['tickets'], ['categories' => ["$tag-Hardware"]], $logger);
+chk('filter (flag): the ticket inside the category is imported', (mapRow('ticket', "$tag-5001")['status'] ?? '') === 'ok' && ($res['counters']['tickets']['created'] ?? 0) === 1, json_encode($res['counters']['tickets'] ?? null));
+chk('filter (flag): the ticket of another category is skipped and has NO map row, no GLPI ticket', mapRow('ticket', "$tag-5002") === null && ($res['counters']['tickets']['skipped'] ?? 0) === 1 && $count('glpi_tickets', ['name' => ['LIKE', "%$tag out%"]]) === 0);
+chk('filter: a filtered run does not move the watermark', $wm() === null);
+$adapter->tickets = [$mkOut("$tag-5003")];
+$opt = $fresh(); $opt['options'] = json_encode(['ticket_categories' => ["$tag-Hardware > Laptop"]]);
+$adapter->tickets = [$mk("$tag-5004", 'Open'), $mkOut("$tag-5003")];
+$res = (new Engine($adapter))->run($opt, 'cli', ['tickets'], [], $logger);
+chk('filter (source option): same rule, deeper path', (mapRow('ticket', "$tag-5004")['status'] ?? '') === 'ok' && mapRow('ticket', "$tag-5003") === null);
+$res = (new Engine($adapter))->run($fresh(), 'cli', ['tickets'], [], $logger);
+chk('filter lifted: the ticket that was left out is imported by the next run (nothing remembered it was skipped)', (mapRow('ticket', "$tag-5003")['status'] ?? '') === 'ok');
+// the category module creates only the branch (and its parents)
+$catAd = new class (['categories' => [[new GlpiPlugin\Itsmmigrator\Adapter\Dto\ExternalCategory('freshservice', "$tag-Hardware > Printer", ["$tag-Hardware", 'Printer']), new GlpiPlugin\Itsmmigrator\Adapter\Dto\ExternalCategory('freshservice', "$tag-Other > Thing", ["$tag-Other", 'Thing'])]]]) extends FakeAdapter {
+    public function __construct(public array $m) {}
+    public function supports(string $mod): bool { return isset($this->m[$mod]); }
+    public function fetchPage(string $mod, int $p, ?DateTimeImmutable $since, ?string $cursor = null): Page { return new Page($this->m[$mod][0], false); }
+};
+$res = (new Engine($catAd))->run($fresh(), 'cli', ['categories'], ['categories' => ["$tag-Hardware"], 'dry_run' => true], $logger);
+chk('filter (categories module): the chosen branch is created, the other branch is skipped', ($res['counters']['categories']['skipped'] ?? 0) === 1 && ($res['counters']['categories']['matched'] ?? 0) + ($res['counters']['categories']['created'] ?? 0) === 1, json_encode($res['counters']['categories'] ?? null));
 // ---- isolation: every ticket the plugin created is in the target entity
 $bad = $count('glpi_tickets', ['name' => ['LIKE', "[FS#%$tag%"], ['NOT' => ['entities_id' => $entity]]]);
 chk('isolation: no [FS#] ticket outside the target entity', $bad === 0);

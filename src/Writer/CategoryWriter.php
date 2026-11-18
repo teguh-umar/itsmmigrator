@@ -3,6 +3,7 @@
 namespace GlpiPlugin\Itsmmigrator\Writer;
 
 use GlpiPlugin\Itsmmigrator\Adapter\Dto\ExternalCategory;
+use GlpiPlugin\Itsmmigrator\CategoryFilter;
 use GlpiPlugin\Itsmmigrator\Context;
 use GlpiPlugin\Itsmmigrator\MapRepository;
 use GlpiPlugin\Itsmmigrator\Matching\VisibleMatcher;
@@ -20,6 +21,10 @@ final class CategoryWriter
         $mod      = 'categories';
         $existing = MapRepository::find($c->source, 'itilcategory', $c->srcId);
         if (MapRepository::decide($existing, $ctx->decideOptions()) === 'skip') {
+            $ctx->counters->add($mod, 'skipped');
+            return 'skipped';
+        }
+        if (!CategoryFilter::allowsCategory($ctx->categoryFilter(), $c->path)) {
             $ctx->counters->add($mod, 'skipped');
             return 'skipped';
         }
