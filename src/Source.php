@@ -93,9 +93,11 @@ class Source extends CommonDBTM
      *
      * @param array<string,mixed> $input  posted fields (only keys present are checked)
      * @param array<string,mixed> $stored current row ([] on add)
+     * @param string[] $otherActive names of the OTHER active sources that use the same adapter
+     *                              (the maps key has no sources_id, spec §3: one active source per adapter)
      * @return string[]
      */
-    public static function errors(array $input, array $stored): array
+    public static function errors(array $input, array $stored, array $otherActive = []): array
     {
         $merged = array_merge($stored, $input);
         $add    = $stored === [];
@@ -123,7 +125,15 @@ class Source extends CommonDBTM
                 $errors[] = __('The base URL must start with https://.', 'itsmmigrator');
             }
         }
-        if (array_key_exists('schedule', $input) && !in_array((string) $input['schedule'], self::SCHEDULES, true)) {
+        // is_active defaults to 1 in the table, so an add without the field is active too.
+        if ($otherActive !== [] && (int) ($merged['is_active'] ?? 1) === 1) {
+            $errors[] = sprintf(
+                __('Another active source already uses the %1$s adapter (%2$s). Deactivate it first: only one active source per adapter is supported.', 'itsmmigrator'),
+                (string) ($merged['adapter'] ?? ''),
+                implode(', ', $otherActive)
+            );
+        }
+        if (array_key_exists('schedule', $input) &&!in_array((string) $input['schedule'], self::SCHEDULES, true)) {
             $errors[] = __('Unknown schedule.', 'itsmmigrator');
         }
         foreach (['status_map', 'priority_map', 'type_map', 'options'] as $json) {
@@ -181,14 +191,39 @@ class Source extends CommonDBTM
         return static fn (string $plain): string => (new GLPIKey())->encrypt($plain);
     }
 
+    /**
+     * Names of the other ACTIVE sources on this adapter (excluding $exceptId).
+     *
+     * @return string[]
+     */
+    private static function otherActiveOnAdapter(string $adapter, int $exceptId): array
+    {
+        global $DB;
+        if ($adapter === '') {
+            return [];
+        }
+        $names = [];
+        foreach ($DB->request([
+            'SELECT' => ['id', 'name'],
+            'FROM'   => self::getTable(),
+            'WHERE'  => ['adapter' => $adapter, 'is_active' => 1, ['NOT' => ['id' => $exceptId]]],
+        ]) as $row) {
+            $names[] = (string) $row['name'];
+        }
+        return $names;
+    }
+
     public function prepareInputForAdd($input)
     {
-        return $this->refuse(self::errors($input, [])) ? false : self::prepare($input, self::encrypter());
+        $others = self::otherActiveOnAdapter((string) ($input['adapter'] ?? ''), 0);
+        return $this->refuse(self::errors($input, [], $others)) ? false : self::prepare($input, self::encrypter());
     }
 
     public function prepareInputForUpdate($input)
     {
-        return $this->refuse(self::errors($input, $this->fields)) ? false : self::prepare($input, self::encrypter());
+        $adapter = (string) ($input['adapter'] ?? $this->fields['adapter'] ?? '');
+        $others  = self::otherActiveOnAdapter($adapter, (int) ($this->fields['id'] ?? 0));
+        return $this->refuse(self::errors($input, $this->fields, $others)) ? false : self::prepare($input, self::encrypter());
     }
 
     /** The only place a stored key is decrypted. */

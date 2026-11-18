@@ -24,6 +24,15 @@ $stored = $good + ['id' => 1];
 check('update with only api_key posted is fine', Source::errors(['api_key' => 'x'], $stored) === []);
 check('update cannot move the source to root', Source::errors(['entities_id' => 0], $stored) !== []);
 
+// One active source per adapter (the maps key has no sources_id, spec §3).
+check('second active source on the same adapter refused', Source::errors($good, [], ['FS legacy']) !== []);
+check('add without is_active counts as active', Source::errors($good, [], ['x']) !== []);
+check('an inactive source may share the adapter', Source::errors(['is_active' => 0] + $good, [], ['FS legacy']) === []);
+check('saving the only active source is fine', Source::errors($good, [], []) === []);
+check('reactivating while another is active is refused', Source::errors(['is_active' => 1], ['is_active' => 0] + $stored, ['other']) !== []);
+check('editing an inactive source without touching is_active still reports a clash only if active',
+    Source::errors(['name' => 'renamed'], ['is_active' => 0] + $stored, ['other']) === []);
+
 $enc = static fn (string $s): string => 'ENC(' . $s . ')';
 $out = Source::prepare(['api_key' => 'secret', 'base_url' => ' https://x.example/ ', 'is_recursive' => 1, 'options' => ''], $enc);
 check('api_key is encrypted', ($out['api_key'] ?? '') === 'ENC(secret)');

@@ -1,2 +1,4 @@
 lib/pgnsuite/*.php -text
 front/pgnsuite.settings.php -text
+tests/ export-ignore
+tools/staging_integration_m2.php export-ignore
