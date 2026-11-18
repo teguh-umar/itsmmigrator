@@ -32,7 +32,8 @@ class RunCommand extends AbstractCommand
 
         $this->addOption('source', null, InputOption::VALUE_REQUIRED, 'Source id or name (required)');
         $this->addOption('modules', null, InputOption::VALUE_REQUIRED, 'Comma list of: ' . implode(',', Engine::MODULES) . ' (default: all supported)');
-        $this->addOption('since', null, InputOption::VALUE_REQUIRED, 'ISO8601 start for tickets; default: everything');
+        $this->addOption('since', null, InputOption::VALUE_REQUIRED, 'ISO8601 start for tickets; default: the source watermark minus 2 hours, or everything without one');
+        $this->addOption('full', null, InputOption::VALUE_NONE, 'Read every ticket: ignore the source watermark');
         $this->addOption('dry-run', null, InputOption::VALUE_NONE, 'Read and match only, write nothing');
         $this->addOption('limit', null, InputOption::VALUE_REQUIRED, 'Stop each module after N items');
         $this->addOption('retry-failed', null, InputOption::VALUE_NONE, 'Retry items whose mapping is failed');
@@ -87,6 +88,7 @@ class RunCommand extends AbstractCommand
 
         $flags = [
             'dry_run'                => (bool) $input->getOption('dry-run'),
+            'full'                   => (bool) $input->getOption('full'),
             'retry_failed'           => (bool) $input->getOption('retry-failed'),
             'recreate_missing'       => (bool) $input->getOption('recreate-missing'),
             'force_unlock'           => (bool) $input->getOption('force-unlock'),

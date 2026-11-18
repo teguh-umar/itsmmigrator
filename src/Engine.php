@@ -119,7 +119,7 @@ final class Engine
         }
 
         $limit = (int) ($ctx->flag('limit') ?? 0);
-        $since = self::parseSince($ctx->flag('since'));
+        $since = self::effectiveSince($ctx->source, $ctx->flags);
         if ((int) $pos['offset'] === 0 && (int) $pos['page'] === 1) {
             $ctx->log("Module $module: start");
         }
@@ -131,6 +131,12 @@ final class Engine
         foreach ($slice as $item) {
             $ctx->counters->add($module, 'fetched');
             $this->dispatch($module, $item, $ctx);
+            if ($module === 'tickets' && $item->updatedAt !== null) {
+                $iso = $item->updatedAt->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d\TH:i:s\Z');
+                if (!isset($pos['max_updated']) || $iso > $pos['max_updated']) {
+                    $pos['max_updated'] = $iso;
+                }
+            }
             $pos['seen']++;
             if ($limit > 0 && $pos['seen'] >= $limit) {
                 $ctx->log("Module $module: --limit $limit reached");
@@ -143,6 +149,9 @@ final class Engine
         $pageDone = $pos['offset'] >= count($result->items);
         if ($limitHit || ($pageDone && !$result->hasMore)) {
             $ctx->log("Module $module: done");
+            if ($module === 'tickets' && !$limitHit) {
+                $pos['tickets_complete'] = true; // the whole list was read: the high-water mark is trustworthy
+            }
             $pos['mi']++;
             $pos['page'] = 1; $pos['cursor'] = null; $pos['offset'] = 0; $pos['seen'] = 0;
         } elseif ($pageDone) {
@@ -193,6 +202,7 @@ final class Engine
             if ($counters->hasFailures()) {
                 $status = 'partial';
             }
+            self::advanceWatermark($source, $pos, $status, $flags, $log);
         } catch (\Throwable $e) {
             // A fetch or infrastructure error: the run stops, the rows already written stay valid.
             $status  = 'failed';
@@ -222,6 +232,91 @@ final class Engine
             $item instanceof ExternalTicket   => $this->tickets->process($item, $this->adapter, $ctx),
             default => throw new \LogicException('Adapter returned ' . $item::class . ' for module ' . $module),
         };
+    }
+
+    /**
+     * Where to start reading tickets (UTC). Pure.
+     *
+     * - an explicit `since` always wins;
+     * - `full`, `retry_failed` and `recreate_missing` read everything: a failed or missing ticket can be
+     *   older than the watermark, and the map makes re-reading harmless;
+     * - otherwise the source's watermark minus a 2 hour overlap (clock skew, tickets updated while the
+     *   last run was reading), or everything when there is no watermark yet.
+     *
+     * @param array<string,mixed> $source
+     * @param array<string,mixed> $flags
+     */
+    public static function effectiveSince(array $source, array $flags): ?\DateTimeImmutable
+    {
+        $explicit = self::parseSince($flags['since'] ?? null);
+        if ($explicit !== null) {
+            return $explicit;
+        }
+        if (!empty($flags['full']) || !empty($flags['retry_failed']) || !empty($flags['recreate_missing'])) {
+            return null;
+        }
+        $wm = $source['watermark'] ?? null;
+        if (!is_string($wm) || trim($wm) === '') {
+            return null;
+        }
+        try {
+            return (new \DateTimeImmutable($wm, new \DateTimeZone(date_default_timezone_get())))
+                ->setTimezone(new \DateTimeZone('UTC'))
+                ->modify('-2 hours');
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * The watermark to store after a run, or null to leave it alone (spec §8.4). Pure.
+     *
+     * Advanced to the highest `updated_at` seen, and only when: it is a real run (not a dry run), the
+     * tickets module was read to its end (not cut by --limit), the run ended success or partial (a fetch
+     * error makes it `failed`, and then nothing moves), something newer than the stored mark was seen.
+     * It never moves backwards.
+     *
+     * @param array<string,mixed> $pos
+     * @param array<string,mixed> $flags
+     * @return string|null `Y-m-d H:i:s` in the PHP timezone
+     */
+    public static function watermarkToWrite(?string $current, array $pos, string $status, array $flags): ?string
+    {
+        if (!empty($flags['dry_run']) || (int) ($flags['limit'] ?? 0) > 0) {
+            return null;
+        }
+        if (!in_array($status, ['success', 'partial'], true) || empty($pos['tickets_complete']) || empty($pos['max_updated'])) {
+            return null;
+        }
+        try {
+            $seen = new \DateTimeImmutable((string) $pos['max_updated']);
+            $tz   = new \DateTimeZone(date_default_timezone_get());
+            if ($current !== null && trim($current) !== '' && $seen <= new \DateTimeImmutable($current, $tz)) {
+                return null;
+            }
+            return $seen->setTimezone($tz)->format('Y-m-d H:i:s');
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Store the new watermark when watermarkToWrite() says so.
+     *
+     * @param array<string,mixed> $source
+     * @param array<string,mixed> $pos
+     * @param array<string,mixed> $flags
+     * @param callable(string):void $log
+     */
+    public static function advanceWatermark(array $source, array $pos, string $status, array $flags, callable $log): void
+    {
+        global $DB;
+        $new = self::watermarkToWrite(isset($source['watermark']) ? (string) $source['watermark'] : null, $pos, $status, $flags);
+        if ($new === null) {
+            return;
+        }
+        $DB->update(Source::getTable(), ['watermark' => $new], ['id' => (int) $source['id']]);
+        $log("Watermark of source {$source['id']} advanced to $new");
     }
 
     /** `--since` (ISO8601) -> UTC DateTimeImmutable; empty or unparsable -> null (everything). Pure. */

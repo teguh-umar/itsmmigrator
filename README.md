@@ -5,7 +5,7 @@ A GLPI 11 plugin that brings data from an external ITSM tool into GLPI, with GLP
 - **Freshservice (API v2):** a one-time import of the history, before Freshservice is taken down.
 - **ManageEngine ServiceDesk Plus on-premises (REST API v3):** an initial import plus a weekly delta sync. *Not built yet (M4).*
 
-Status: release candidate `0.1.0-rc5`. See `CHANGELOG.md` for what each build contains and for the open items.
+Status: release candidate `0.1.0-rc6`. See `CHANGELOG.md` for what each build contains and for the open items.
 
 ## What it guarantees
 
@@ -17,6 +17,7 @@ Status: release candidate `0.1.0-rc5`. See `CHANGELOG.md` for what each build co
 | Existing users are matched, never changed | E-mail (all addresses, alias domains second), then login, then the directory, then a local user only with `--create-missing-users`. Ambiguity is `needs_review`, never a guess. |
 | Existing users are never sent to the LDAP import | GLPI's import call re-activates an inactive user. The lookup searches read-only and imports only a person who is not yet a GLPI user. |
 | Existing groups and categories are matched | What the target entity can already see (its own rows plus recursive rows of ancestor entities), nearest entity first. |
+| A delta, not a re-read | The source keeps a **watermark**: the newest `updated_at` of the last complete, successful run. The next run reads from the watermark minus 2 hours. It moves only after a real run that read the whole ticket list (not a dry run, not `--limit`) and ended success or partial; a fetch error leaves it alone; it never moves back. `--full`, `--retry-failed` and `--recreate-missing` read everything; `--since` wins over all. |
 | Re-runnable | Resume (`in_progress`), `--retry-failed`, `--recreate-missing`. A second run with no source change changes nothing. |
 | Tables survive uninstall | Dropping the maps would make a reinstall import everything again. Only `plugins:itsmmigrator:purge --confirm` drops them. |
 
@@ -51,7 +52,7 @@ GLPI 11 only loads plugin commands named `plugins:<key>:<name>`, so these are **
 | `plugins:itsmmigrator:verify` | Read-only consistency check. Exit code 0 = clean, 1 = something found. The gate before production. |
 | `plugins:itsmmigrator:purge` | Drop the plugin tables, or one source's map rows (`--source=<id>`). Does nothing without `--confirm`. Migrated GLPI data is never deleted. |
 
-`run` options: `--source`, `--modules` (users, groups, categories, tickets), `--since`, `--dry-run`, `--limit`, `--retry-failed`, `--recreate-missing`, `--force-unlock`, `--create-missing-users`, `--activate-created-users`, `--fallback-user`, `--assign-profiles`, `--no-ldap-lookup`.
+`run` options: `--source`, `--modules` (users, groups, categories, tickets), `--since`, `--full`, `--dry-run`, `--limit`, `--retry-failed`, `--recreate-missing`, `--force-unlock`, `--create-missing-users`, `--activate-created-users`, `--fallback-user`, `--assign-profiles`, `--no-ldap-lookup`.
 
 ## Sources
 
@@ -77,4 +78,4 @@ The offline suites need the `mbstring` extension. The staging tools create throw
 
 ## Documentation
 
-The user manual is written by Copilot (hub §0 rule 9). The step-by-step deployment is `docs/runbook-v0.1.0-rc5.md`.
+The user manual is written by Copilot (hub §0 rule 9). The step-by-step deployment is `docs/runbook-v0.1.0-rc6.md`.

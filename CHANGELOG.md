@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0-rc6
+
+- **Source watermark (spec §8.4).** The newest `updated_at` of the last complete, successful run is stored on the source. The next run reads tickets from the watermark **minus 2 hours** (clock skew, tickets updated while the last run was reading); with no watermark it reads everything. It moves only after a real run (not a dry run) that read the tickets module to its end (not cut by `--limit`) and ended `success` or `partial`; a fetch error makes the run `failed` and leaves it alone; it never moves backwards. `--full` ignores it; `--retry-failed` and `--recreate-missing` also read everything, because a failed or missing ticket can be older than the watermark (the map makes re-reading harmless); an explicit `--since` wins over all of these. The Runs page has a "Read everything" box and the CLI a `--full` option. Pure rules (`Engine::effectiveSince()`, `Engine::watermarkToWrite()`) are unit-tested; the whole path is tested on staging 2 (12 checks).
+- **Freshservice group membership.** Members are read from the group (`agent_ids` or `members`, fetched per group when the list does not carry them) as `agent:<id>`. `GroupWriter` adds a `Group_User` row only for a user that is mapped `ok`, only when the row does not exist, and only into a group the plugin created or matched in the target entity; a group matched in a parent entity gets members only when the source option `add_members_to_matched_groups` is on (off by default). Tested on staging 2: skipped, needs_review and unknown users are never added, a re-run does not add twice, the option works. The field names are from the documentation and unverified.
+- **Staging tools made safe on a staging GLPI that holds a real source.** The tools used to create their test source with `Source::add` (refused when an active source already exists on the adapter) and to delete maps and runs without a source filter. They now insert their own source row directly, use test-only ids (a tag prefix) and delete only rows of their own source id. Found when a real source was entered on staging 2 while the tools were running.
+- Fixtures: `groups.json`, `group_302.json`. Tests: 277 offline.
+- **Open items.** Freshservice field names, the category choices shape, `resolution`, `stats` and the group member key are from the documentation and unchecked against real data (the read-only key is now on staging 2: next is recording scrubbed responses and a `--dry-run --limit=50`); no LDAP test against a bound directory; ServiceDesk Plus, the update mode and the read-only guard (M4) are not built.
+
 ## 0.1.0-rc5
 
 - **M6: the web UI.** ICT Tools > ITSM Migrator now has three pages and a tab.

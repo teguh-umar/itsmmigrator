@@ -17,6 +17,21 @@ use GlpiPlugin\Itsmmigrator\Adapter\Dto\{ExternalAttachment, ExternalNote, Exter
 use GlpiPlugin\Itsmmigrator\Adapter\SourceAdapterInterface;
 use GlpiPlugin\Itsmmigrator\{Engine, MapRepository, Source};
 
+
+/**
+ * A test source, inserted directly: the staging GLPI may hold a REAL source (Source::add allows one active source per
+ * adapter), and these tools must never touch it. Everything they delete is scoped to this id.
+ */
+function mkTestSource(string $name, int $entity, string $apiKey, ?string $options = null): int
+{
+    global $DB;
+    $now = date('Y-m-d H:i:s');
+    $DB->insert('glpi_plugin_itsmmigrator_sources', [
+        'name' => $name, 'adapter' => 'freshservice', 'base_url' => 'https://fs.example.test', 'api_key' => (new GLPIKey())->encrypt($apiKey),
+        'entities_id' => $entity, 'options' => $options, 'schedule' => 'manual', 'is_active' => 1, 'date_creation' => $now, 'date_mod' => $now,
+    ]);
+    return (int) $DB->insertId();
+}
 $pass = 0; $fail = 0;
 function chk(string $l, bool $ok, string $d = ''): void { global $pass, $fail; if ($ok) { $pass++; echo "PASS $l\n"; } else { $fail++; echo "FAIL $l $d\n"; } }
 function mapRow(string $type, string $id): ?array { return MapRepository::find('freshservice', $type, $id); }
@@ -33,25 +48,25 @@ $group     = (new Group())->add(['name' => "$tag Group", 'entities_id' => $entit
 $cat       = (new ITILCategory())->add(['name' => "$tag-Hardware", 'entities_id' => $entity]);
 $cat2      = (new ITILCategory())->add(['name' => 'Laptop', 'itilcategories_id' => $cat, 'entities_id' => $entity]);
 
-$src = new Source();
-$sid = $src->add(['name' => "$tag-src", 'adapter' => 'freshservice', 'base_url' => 'https://fs.example.test', 'entities_id' => $entity, 'api_key' => 'k']);
+$sid = mkTestSource("$tag-src", $entity, 'k');
+$src = new Source(); $src->getFromDB($sid);
 $source = $src->fields; $source['id'] = $sid; unset($source['api_key']);
 
-foreach ([['user', 'requester:501', 'User', $requester], ['user', 'agent:201', 'User', $agent], ['group', '301', 'Group', $group], ['itilcategory', "$tag-Hardware > Laptop", 'ITILCategory', $cat2]] as [$t, $id, $it, $gid]) {
+foreach ([['user', "requester:$tag-501", 'User', $requester], ['user', "agent:$tag-201", 'User', $agent], ['group', "$tag-301", 'Group', $group], ['itilcategory', "$tag-Hardware > Laptop", 'ITILCategory', $cat2]] as [$t, $id, $it, $gid]) {
     $r = MapRepository::begin($sid, 'freshservice', $t, $id, $it, (int) $gid, 'matched'); MapRepository::markOk((int) $r['id']);
 }
 
 $d = fn (string $s) => new DateTimeImmutable($s);
 $mk = fn (string $id, string $status, array $extra = []) => new ExternalTicket('freshservice', $id, "$tag subject $id", "<p>Body $id</p>", $status, 'High', 'Incident',
-    'requester:501', 'agent:201', '301', [$tag . '-Hardware', 'Laptop'], $d('2024-03-01T01:02:03Z'), $d('2024-03-05T09:00:00Z'), $id, $d('2024-03-02T04:05:06Z'));
+    "requester:$tag-501", "agent:$tag-201", "$tag-301", [$tag . '-Hardware', 'Laptop'], $d('2024-03-01T01:02:03Z'), $d('2024-03-05T09:00:00Z'), $id, $d('2024-03-02T04:05:06Z'));
 
 class FakeAdapter implements SourceAdapterInterface {
-    public array $failAttachment = []; public array $failNote = []; public int $childCalls = 0;
+    public array $failAttachment = []; public array $failNote = []; public int $childCalls = 0; public array $sinces = [];
     public function __construct(public array $tickets, public array $children) {}
     public function getSourceKey(): string { return 'freshservice'; }
     public function supports(string $m): bool { return $m === 'tickets'; }
     public function testConnection(): array { return ['ok' => true, 'message' => '']; }
-    public function fetchPage(string $m, int $p, ?DateTimeImmutable $since, ?string $cursor = null): Page { return new Page($this->tickets, false); }
+    public function fetchPage(string $m, int $p, ?DateTimeImmutable $since, ?string $cursor = null): Page { $this->sinces[] = $since?->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'); return new Page($this->tickets, false); }
     public function fetchTicketChildren(string $id): TicketChildren {
         $this->childCalls++;
         $c = $this->children[$id] ?? new TicketChildren();
@@ -67,13 +82,13 @@ class FakeAdapter implements SourceAdapterInterface {
 }
 
 $children = new TicketChildren(
-    [new ExternalNote('freshservice', '7001', '1001', '<p>Public note</p>', false, '201', $d('2024-03-01T02:00:00Z')),
-     new ExternalNote('freshservice', '7002', '1001', '<p>Private note</p>', true, '201', $d('2024-03-01T03:00:00Z'))],
-    [new ExternalTask('freshservice', '8001', '1001', 'Reimage', 'Standard image', 'done', 'agent:201', $d('2024-03-01T04:00:00Z'))],
-    [new ExternalWorklog('freshservice', '8501', '1001', 5400, 'Reimage and test', 'agent:201', $d('2024-03-02T01:00:00Z'))],
-    [new ExternalAttachment('freshservice', '9001', '1001', 'photo.txt', 'https://s3.example.test/9001', 10)],
+    [new ExternalNote('freshservice', "$tag-7001", "$tag-1001", '<p>Public note</p>', false, "$tag-201", $d('2024-03-01T02:00:00Z')),
+     new ExternalNote('freshservice', "$tag-7002", "$tag-1001", '<p>Private note</p>', true, "$tag-201", $d('2024-03-01T03:00:00Z'))],
+    [new ExternalTask('freshservice', "$tag-8001", "$tag-1001", 'Reimage', 'Standard image', 'done', "agent:$tag-201", $d('2024-03-01T04:00:00Z'))],
+    [new ExternalWorklog('freshservice', "$tag-8501", "$tag-1001", 5400, 'Reimage and test', "agent:$tag-201", $d('2024-03-02T01:00:00Z'))],
+    [new ExternalAttachment('freshservice', "$tag-9001", "$tag-1001", 'photo.txt', 'https://s3.example.test/9001', 10)],
     '<p>Reimaged the laptop</p>', $d('2024-03-02T03:00:00Z'), null);
-$adapter = new FakeAdapter([$mk('1001', 'Resolved'), $mk('1002', 'Open')], ['1001' => $children]);
+$adapter = new FakeAdapter([$mk("$tag-1001", 'Resolved'), $mk("$tag-1002", 'Open')], ["$tag-1001" => $children]);
 
 $log = []; $logger = function (string $m) use (&$log) { $log[] = $m; };
 $count = fn (string $t, array $w = []) => countElementsInTable($t, $w);
@@ -88,10 +103,10 @@ chk('dry run: would create 2', ($res['counters']['tickets']['created'] ?? 0) ===
 // ---- real run
 $res = (new Engine($adapter))->run($source, 'cli', ['tickets'], [], $logger);
 chk('run: success, 2 created', $res['status'] === 'success' && ($res['counters']['tickets']['created'] ?? 0) === 2, json_encode($res));
-$m = mapRow('ticket', '1001'); $tid = (int) ($m['items_id'] ?? 0);
+$m = mapRow('ticket', "$tag-1001"); $tid = (int) ($m['items_id'] ?? 0);
 chk('ticket 1001 mapped ok', $m && $m['status'] === 'ok' && $m['action'] === 'created' && $tid > 0);
 $t = new Ticket(); $t->getFromDB($tid); $f = $t->fields;
-chk('title is [FS#1001] subject', $f['name'] === "[FS#1001] $tag subject 1001", $f['name']);
+chk('title is [FS#<tag>-1001] subject', $f['name'] === "[FS#$tag-1001] $tag subject $tag-1001", $f['name']);
 chk('ticket is in the target entity', (int) $f['entities_id'] === (int) $entity);
 chk('status Resolved -> Solved (5)', (int) $f['status'] === 5, (string) $f['status']);
 chk('priority High -> 4, type Incident -> 1', (int) $f['priority'] === 4 && (int) $f['type'] === 1);
@@ -102,7 +117,7 @@ chk('category mapped', (int) $f['itilcategories_id'] === (int) $cat2);
 $tu = []; foreach ($DB->request(['FROM' => 'glpi_tickets_users', 'WHERE' => ['tickets_id' => $tid]]) as $r) { $tu[] = $r['type'] . ':' . $r['users_id']; }
 chk('requester and assignee mapped', $count('glpi_tickets_users', ['tickets_id' => $tid, 'type' => 1, 'users_id' => $requester]) === 1 && $count('glpi_tickets_users', ['tickets_id' => $tid, 'type' => 2, 'users_id' => $agent]) === 1, 'rows=' . implode(',', $tu) . " want 1:$requester 2:$agent");
 chk('assignee group mapped', $count('glpi_groups_tickets', ['tickets_id' => $tid, 'type' => 2, 'groups_id' => $group]) === 1);
-$t2 = new Ticket(); $t2->getFromDB((int) mapRow('ticket', '1002')['items_id']);
+$t2 = new Ticket(); $t2->getFromDB((int) mapRow('ticket', "$tag-1002")['items_id']);
 chk('ticket 1002: Open + assignee -> Assigned (2)', (int) $t2->fields['status'] === 2);
 chk('followups: 2, one private', $count('glpi_itilfollowups', ['itemtype' => 'Ticket', 'items_id' => $tid]) === 2 && $count('glpi_itilfollowups', ['itemtype' => 'Ticket', 'items_id' => $tid, 'is_private' => 1]) === 1);
 $fu = $DB->request(['FROM' => 'glpi_itilfollowups', 'WHERE' => ['itemtype' => 'Ticket', 'items_id' => $tid], 'ORDER' => 'id'])->current();
@@ -115,7 +130,7 @@ chk('document attached to the ticket', $count('glpi_documents_items', ['itemtype
 $di = $DB->request(['FROM' => 'glpi_documents_items', 'WHERE' => ['itemtype' => 'Ticket', 'items_id' => $tid]])->current();
 $doc = new Document(); $doc->getFromDB((int) ($di['documents_id'] ?? 0));
 chk('document is in the target entity, not recursive', (int) $doc->fields['entities_id'] === (int) $entity && (int) $doc->fields['is_recursive'] === 0);
-chk('children have their own map rows', mapRow('note', '7001')['status'] === 'ok' && mapRow('task', '8001')['status'] === 'ok' && mapRow('worklog', '8501')['status'] === 'ok' && mapRow('document', '9001')['status'] === 'ok' && mapRow('solution', '1001')['status'] === 'ok');
+chk('children have their own map rows', mapRow('note', "$tag-7001")['status'] === 'ok' && mapRow('task', "$tag-8001")['status'] === 'ok' && mapRow('worklog', "$tag-8501")['status'] === 'ok' && mapRow('document', "$tag-9001")['status'] === 'ok' && mapRow('solution', "$tag-1001")['status'] === 'ok');
 
 // ---- idempotency
 $snap = fn () => [$count('glpi_tickets'), $count('glpi_itilfollowups'), $count('glpi_tickettasks'), $count('glpi_itilsolutions'), $count('glpi_documents'), $count('glpi_documents_items'), $count('glpi_plugin_itsmmigrator_maps')];
@@ -124,27 +139,27 @@ $res = (new Engine($adapter))->run($source, 'cli', ['tickets'], [], $logger);
 chk('second run: nothing new anywhere', $snap() === $a && ($res['counters']['tickets']['skipped'] ?? 0) === 2, json_encode($res['counters']));
 
 // ---- resume: ticket row in_progress, children already in place -> same ticket, no duplicates
-$DB->update('glpi_plugin_itsmmigrator_maps', ['status' => 'in_progress'], ['source' => 'freshservice', 'src_type' => 'ticket', 'src_id' => '1001']);
+$DB->update('glpi_plugin_itsmmigrator_maps', ['status' => 'in_progress'], ['sources_id' => $sid, 'source' => 'freshservice', 'src_type' => 'ticket', 'src_id' => "$tag-1001"]);
 $res = (new Engine($adapter))->run($source, 'cli', ['tickets'], [], $logger);
-chk('resume: same ticket, no duplicates', $snap() === $a && (int) mapRow('ticket', '1001')['items_id'] === $tid && mapRow('ticket', '1001')['status'] === 'ok');
+chk('resume: same ticket, no duplicates', $snap() === $a && (int) mapRow('ticket', "$tag-1001")['items_id'] === $tid && mapRow('ticket', "$tag-1001")['status'] === 'ok');
 
 // ---- a failing attachment: ticket failed, nothing duplicated, retry completes it
-$DB->delete('glpi_plugin_itsmmigrator_maps', ['source' => 'freshservice', 'src_type' => 'document', 'src_id' => '9001']);
+$DB->delete('glpi_plugin_itsmmigrator_maps', ['sources_id' => $sid, 'src_type' => 'document']);
 $DB->delete('glpi_documents_items', ['itemtype' => 'Ticket', 'items_id' => $tid]);
-$DB->update('glpi_plugin_itsmmigrator_maps', ['status' => 'in_progress'], ['source' => 'freshservice', 'src_type' => 'ticket', 'src_id' => '1001']);
-$adapter->failAttachment = ['9001'];
+$DB->update('glpi_plugin_itsmmigrator_maps', ['status' => 'in_progress'], ['sources_id' => $sid, 'source' => 'freshservice', 'src_type' => 'ticket', 'src_id' => "$tag-1001"]);
+$adapter->failAttachment = ["$tag-9001"];
 $res = (new Engine($adapter))->run($source, 'cli', ['tickets'], [], $logger);
-chk('failed child: ticket marked failed, run partial', mapRow('ticket', '1001')['status'] === 'failed' && $res['status'] === 'partial', json_encode([mapRow('ticket', '1001')['status'], $res['status']]));
+chk('failed child: ticket marked failed, run partial', mapRow('ticket', "$tag-1001")['status'] === 'failed' && $res['status'] === 'partial', json_encode([mapRow('ticket', "$tag-1001")['status'], $res['status']]));
 chk('failed child: no duplicate followups or tasks', $count('glpi_itilfollowups', ['itemtype' => 'Ticket', 'items_id' => $tid]) === 2 && $count('glpi_tickettasks', ['tickets_id' => $tid]) === 2);
 $adapter->failAttachment = [];
 (new Engine($adapter))->run($source, 'cli', ['tickets'], [], $logger);
-chk('failed ticket is skipped without --retry-failed', mapRow('ticket', '1001')['status'] === 'failed');
+chk('failed ticket is skipped without --retry-failed', mapRow('ticket', "$tag-1001")['status'] === 'failed');
 $res = (new Engine($adapter))->run($source, 'cli', ['tickets'], ['retry_failed' => true], $logger);
-chk('--retry-failed completes it, still 1 ticket', mapRow('ticket', '1001')['status'] === 'ok' && $count('glpi_tickets', ['name' => ['LIKE', "%$tag subject 1001"]]) === 1 && $count('glpi_documents_items', ['itemtype' => 'Ticket', 'items_id' => $tid]) === 1);
+chk('--retry-failed completes it, still 1 ticket', mapRow('ticket', "$tag-1001")['status'] === 'ok' && $count('glpi_tickets', ['name' => ['LIKE', "%$tag subject $tag-1001"]]) === 1 && $count('glpi_documents_items', ['itemtype' => 'Ticket', 'items_id' => $tid]) === 1);
 chk('same file is one Document (sha1 natural key)', $count('glpi_documents', ['entities_id' => $entity]) === 1);
 
 // ---- natural key: map rows lost, tickets adopted by their [FS#id] title
-$DB->delete('glpi_plugin_itsmmigrator_maps', ['source' => 'freshservice', 'src_type' => ['ticket', 'note', 'task', 'worklog', 'solution', 'document']]);
+$DB->delete('glpi_plugin_itsmmigrator_maps', ['sources_id' => $sid, 'src_type' => ['ticket', 'note', 'task', 'worklog', 'solution', 'document']]);
 $tickets = $count('glpi_tickets'); $fus = $count('glpi_itilfollowups'); $tasks = $count('glpi_tickettasks'); $sol = $count('glpi_itilsolutions');
 $res = (new Engine($adapter))->run($source, 'cli', ['tickets'], [], $logger);
 chk('natural key: adopted, no new ticket', $count('glpi_tickets') === $tickets && ($res['counters']['tickets']['matched'] ?? 0) === 2, json_encode($res['counters']));
@@ -152,13 +167,45 @@ chk('natural key: followups, tasks, solution adopted, none duplicated', $count('
 
 // ---- cross-source link: an SDP row with origin_ref already points at a GLPI ticket
 $other = (new Ticket())->add(['name' => "$tag [SDP-made]", 'content' => 'x', 'entities_id' => $entity, '_disablenotif' => true]);
-$r = MapRepository::begin($sid, 'sdp', 'ticket', 'sdp-9', 'Ticket', (int) $other, 'created', ['origin_ref' => 'freshservice:ticket:2002']); MapRepository::markOk((int) $r['id']);
-$adapter->tickets = [$mk('2002', 'Open')];
+$r = MapRepository::begin($sid, 'sdp', 'ticket', 'sdp-9', 'Ticket', (int) $other, 'created', ['origin_ref' => "freshservice:ticket:$tag-2002"]); MapRepository::markOk((int) $r['id']);
+$adapter->tickets = [$mk("$tag-2002", 'Open')];
 $before = $count('glpi_tickets');
 $res = (new Engine($adapter))->run($source, 'cli', ['tickets'], [], $logger);
-$m = mapRow('ticket', '2002');
+$m = mapRow('ticket', "$tag-2002");
 chk('link: FS ticket linked to the SDP-made GLPI ticket, nothing created', $m && $m['action'] === 'linked' && (int) $m['items_id'] === (int) $other && $count('glpi_tickets') === $before && ($res['counters']['tickets']['linked'] ?? 0) === 1, json_encode($res['counters']));
 
+// ---- watermark (spec §8.4): advanced only by a complete, real, successful run
+$wm = fn () => $DB->request(['SELECT' => ['watermark'], 'FROM' => 'glpi_plugin_itsmmigrator_sources', 'WHERE' => ['id' => $sid]])->current()['watermark'];
+$fresh = fn () => (function () use ($sid) { $s = new Source(); $s->getFromDB($sid); $r = $s->fields; unset($r['api_key']); return $r; })();
+$DB->update('glpi_plugin_itsmmigrator_sources', ['watermark' => null], ['id' => $sid]);
+$adapter->tickets = [$mk("$tag-3001", 'Open'), $mk("$tag-3002", 'Open')];
+(new Engine($adapter))->run($fresh(), 'cli', ['tickets'], ['dry_run' => true], $logger);
+chk('watermark: a dry run does not move it', $wm() === null);
+(new Engine($adapter))->run($fresh(), 'cli', ['tickets'], ['limit' => 1], $logger);
+chk('watermark: a run cut by --limit does not move it', $wm() === null);
+(new Engine($adapter))->run($fresh(), 'cli', ['tickets'], [], $logger);
+$expect = (new DateTimeImmutable('2024-03-02T04:05:06Z'))->setTimezone(new DateTimeZone(date_default_timezone_get()))->format('Y-m-d H:i:s');
+chk('watermark: a complete real run moves it to the newest updated_at', $wm() === $expect, (string) $wm() . " want $expect");
+$adapter->sinces = [];
+(new Engine($adapter))->run($fresh(), 'cli', ['tickets'], [], $logger);
+chk('watermark: the next run reads from watermark minus 2 hours', end($adapter->sinces) === '2024-03-02 02:05:06', json_encode($adapter->sinces));
+$adapter->sinces = [];
+(new Engine($adapter))->run($fresh(), 'cli', ['tickets'], ['full' => true], $logger);
+chk('watermark: --full reads everything again', end($adapter->sinces) === null);
+$adapter->sinces = [];
+(new Engine($adapter))->run($fresh(), 'cli', ['tickets'], ['retry_failed' => true], $logger);
+chk('watermark: --retry-failed reads everything (a failed ticket can be older)', end($adapter->sinces) === null);
+$before = $wm();
+$adapter->tickets = [$mk("$tag-3003", 'Open')];
+$adapter->failAttachment = []; $adapter->failNote = [];
+// a run that fails while fetching must not move it
+$bad = new class ($adapter->tickets, []) extends FakeAdapter { public function fetchPage(string $m, int $p, ?DateTimeImmutable $s, ?string $c = null): Page { throw new RuntimeException('network down'); } };
+$res = (new Engine($bad))->run($fresh(), 'cli', ['tickets'], [], $logger);
+chk('watermark: a fetch error fails the run and leaves the mark alone', $res['status'] === 'failed' && $wm() === $before);
+$older = (new ExternalTicket('freshservice', "$tag-3004", "$tag old", '<p>b</p>', 'Open', 'Medium', 'Incident', null, null, null, [], $d('2020-01-01T00:00:00Z'), null, "$tag-3004", $d('2020-01-02T00:00:00Z')));
+$adapter->tickets = [$older];
+(new Engine($adapter))->run($fresh(), 'cli', ['tickets'], ['full' => true], $logger);
+chk('watermark: it never moves backwards', $wm() === $before);
 // ---- isolation: every ticket the plugin created is in the target entity
 $bad = $count('glpi_tickets', ['name' => ['LIKE', "[FS#%$tag%"], ['NOT' => ['entities_id' => $entity]]]);
 chk('isolation: no [FS#] ticket outside the target entity', $bad === 0);
@@ -170,8 +217,8 @@ foreach ($DB->request(['SELECT' => ['id'], 'FROM' => 'glpi_tickets', 'WHERE' => 
     $DB->delete('glpi_tickets', ['id' => $r['id']]);
 }
 $DB->delete('glpi_documents', ['entities_id' => $entity]);
-$DB->delete('glpi_plugin_itsmmigrator_maps', ['sources_id' => ['>', 0]]);
-$DB->delete('glpi_plugin_itsmmigrator_runs', ['id' => ['>', 0]]);
+$DB->delete('glpi_plugin_itsmmigrator_maps', ['sources_id' => $sid]);
+$DB->delete('glpi_plugin_itsmmigrator_runs', ['sources_id' => $sid]);
 $DB->delete('glpi_plugin_itsmmigrator_sources', ['id' => $sid]);
 $DB->delete('glpi_itilcategories', ['entities_id' => $entity]); $DB->delete('glpi_groups', ['entities_id' => $entity]);
 foreach ($DB->request(['SELECT' => ['id'], 'FROM' => 'glpi_users', 'WHERE' => ['name' => ['LIKE', "$tag%"]]]) as $r) { $DB->delete('glpi_profiles_users', ['users_id' => $r['id']]); $DB->delete('glpi_useremails', ['users_id' => $r['id']]); $DB->delete('glpi_users', ['id' => $r['id']]); }

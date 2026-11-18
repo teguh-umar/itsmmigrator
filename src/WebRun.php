@@ -23,7 +23,7 @@ final class WebRun
 
     /** Flags a browser may set, with their type. Anything else is dropped. */
     private const FLAGS = [
-        'dry_run' => 'bool', 'retry_failed' => 'bool', 'recreate_missing' => 'bool', 'create_missing_users' => 'bool',
+        'dry_run' => 'bool', 'full' => 'bool', 'retry_failed' => 'bool', 'recreate_missing' => 'bool', 'create_missing_users' => 'bool',
         'activate_created_users' => 'bool', 'ldap_lookup' => 'bool', 'limit' => 'int', 'fallback_user' => 'int',
         'assign_profiles' => 'profiles', 'since' => 'string',
     ];
@@ -161,6 +161,9 @@ final class WebRun
 
         if ($done) {
             $status ??= $counters->hasFailures() ? 'partial' : 'success';
+            if (isset($state['pos']) && isset($state['flags']) && isset($fields)) {
+                Engine::advanceWatermark($fields, $state['pos'], $status, $state['flags'], $logger);
+            }
             Lock::release($runId, $status, $counters->all(), $message);
             unset($_SESSION[self::SESSION_KEY][$runId]);
         }

@@ -19,6 +19,21 @@ use GlpiPlugin\Itsmmigrator\Adapter\SourceAdapterInterface;
 use GlpiPlugin\Itsmmigrator\{Lock, MapRepository, NeedsReview, ReviewView, RunView, Source, WebRun};
 use GlpiPlugin\Itsmmigrator\Tab\ExternalReferenceTab;
 
+
+/**
+ * A test source, inserted directly: the staging GLPI may hold a REAL source (Source::add allows one active source per
+ * adapter), and these tools must never touch it. Everything they delete is scoped to this id.
+ */
+function mkTestSource(string $name, int $entity, string $apiKey, ?string $options = null): int
+{
+    global $DB;
+    $now = date('Y-m-d H:i:s');
+    $DB->insert('glpi_plugin_itsmmigrator_sources', [
+        'name' => $name, 'adapter' => 'freshservice', 'base_url' => 'https://fs.example.test', 'api_key' => (new GLPIKey())->encrypt($apiKey),
+        'entities_id' => $entity, 'options' => $options, 'schedule' => 'manual', 'is_active' => 1, 'date_creation' => $now, 'date_mod' => $now,
+    ]);
+    return (int) $DB->insertId();
+}
 $pass = 0; $fail = 0;
 function chk(string $l, bool $ok, string $d = ''): void { global $pass, $fail; if ($ok) { $pass++; echo "PASS $l\n"; } else { $fail++; echo "FAIL $l $d\n"; } }
 $count = fn (string $t, array $w = []) => countElementsInTable($t, $w);
@@ -27,8 +42,8 @@ $tag = 'itsmtest' . substr(md5((string) microtime(true)), 0, 6);
 $entity = (new Entity())->add(['name' => "$tag-target", 'entities_id' => 0]);
 $_SESSION['glpiactiveentities'] = [0, $entity];
 $SECRET = "SECRET-$tag-KEY";
-$src = new Source();
-$sid = $src->add(['name' => "$tag-src", 'adapter' => 'freshservice', 'base_url' => 'https://fs.example.test', 'entities_id' => $entity, 'api_key' => $SECRET]);
+$sid = mkTestSource("$tag-src", $entity, $SECRET);
+$src = new Source(); $src->getFromDB($sid);
 
 class FakeAdapter implements SourceAdapterInterface {
     public int $pageFetches = 0;
@@ -165,7 +180,7 @@ chk('tab: lists source, id, how it got here, status', str_contains($html, "$tag-
 chk('tab: deep link built from the source base_url', str_contains($html, 'https://fs.example.test/a/tickets/') && str_contains($html, 'noopener'));
 chk('tab: never shows the API key or the stored ciphertext', !str_contains($html, $SECRET) && !str_contains($html, (string) $src->fields['api_key']));
 chk('tab: no "read-only mirror" banner for a Freshservice import', !str_contains($html, 'read-only mirror'));
-$DB->update('glpi_plugin_itsmmigrator_maps', ['sync_owned' => 1], ['source' => 'freshservice', 'src_type' => 'ticket', 'src_id' => "$tag-w1"]);
+$DB->update('glpi_plugin_itsmmigrator_maps', ['sync_owned' => 1], ['sources_id' => $sid, 'source' => 'freshservice', 'src_type' => 'ticket', 'src_id' => "$tag-w1"]);
 ob_start(); ExternalReferenceTab::displayTabContentForItem($ticket); $html = ob_get_clean();
 chk('tab: a sync-owned ticket shows the read-only banner naming the source', str_contains($html, 'read-only mirror') && str_contains($html, "$tag-src"));
 chk('deepLink: Freshservice and SDP, https only, nothing for an unknown type', ExternalReferenceTab::deepLink('freshservice', 'https://x.example/', 'ticket', '42') === 'https://x.example/a/tickets/42'
@@ -180,8 +195,8 @@ chk('menu: sources, runs and needs-review options', isset($entry['options']['sou
 // ---- cleanup (staging only)
 AdapterFactory::setOverride(null);
 foreach ($DB->request(['SELECT' => ['id'], 'FROM' => 'glpi_tickets', 'WHERE' => ['entities_id' => $entity]]) as $r) { $DB->delete('glpi_tickets_users', ['tickets_id' => $r['id']]); $DB->delete('glpi_groups_tickets', ['tickets_id' => $r['id']]); $DB->delete('glpi_tickets', ['id' => $r['id']]); }
-$DB->delete('glpi_plugin_itsmmigrator_maps', ['sources_id' => ['>', 0]]);
-$DB->delete('glpi_plugin_itsmmigrator_runs', ['id' => ['>', 0]]);
+$DB->delete('glpi_plugin_itsmmigrator_maps', ['sources_id' => $sid]);
+$DB->delete('glpi_plugin_itsmmigrator_runs', ['sources_id' => $sid]);
 $DB->delete('glpi_plugin_itsmmigrator_sources', ['id' => $sid]);
 foreach ($DB->request(['SELECT' => ['id'], 'FROM' => 'glpi_users', 'WHERE' => ['name' => ['LIKE', "$tag%"]]]) as $r) { $DB->delete('glpi_profiles_users', ['users_id' => $r['id']]); $DB->delete('glpi_useremails', ['users_id' => $r['id']]); $DB->delete('glpi_users', ['id' => $r['id']]); }
 $DB->delete('glpi_entities', ['id' => $entity]);

@@ -48,4 +48,23 @@ check('Counters survive a round trip through a stored run', (function () {
     $c = new Counters(); $c->add('users', 'created', 3); $c->add('tickets', 'failed', 1);
     return Counters::fromArray($c->all())->all() === $c->all();
 })());
+// ---- watermark (spec §8.4)
+$utc = static fn (?DateTimeImmutable $d): ?string => $d?->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+check('no watermark, no flags -> read everything', Engine::effectiveSince(['watermark' => null], []) === null && Engine::effectiveSince([], []) === null);
+check('watermark minus 2 hours (stored in local time, read as UTC)', $utc(Engine::effectiveSince(['watermark' => '2024-03-10 10:00:00'], [])) === '2024-03-10 01:00:00', (string) $utc(Engine::effectiveSince(['watermark' => '2024-03-10 10:00:00'], [])));
+check('--full ignores the watermark', Engine::effectiveSince(['watermark' => '2024-03-10 10:00:00'], ['full' => true]) === null);
+check('--retry-failed and --recreate-missing read everything too', Engine::effectiveSince(['watermark' => '2024-03-10 10:00:00'], ['retry_failed' => true]) === null && Engine::effectiveSince(['watermark' => '2024-03-10 10:00:00'], ['recreate_missing' => true]) === null);
+check('an explicit --since beats the watermark and --full', $utc(Engine::effectiveSince(['watermark' => '2024-03-10 10:00:00'], ['since' => '2024-01-01T00:00:00Z', 'full' => true])) === '2024-01-01 00:00:00');
+
+$pos = ['tickets_complete' => true, 'max_updated' => '2024-03-12T03:00:00Z'];
+check('advances to the max seen, in local time', Engine::watermarkToWrite(null, $pos, 'success', []) === '2024-03-12 10:00:00');
+check('advances on partial (item failures) too', Engine::watermarkToWrite('2024-03-01 00:00:00', $pos, 'partial', []) === '2024-03-12 10:00:00');
+check('never on failed (a fetch error)', Engine::watermarkToWrite(null, $pos, 'failed', []) === null);
+check('never on aborted', Engine::watermarkToWrite(null, $pos, 'aborted', []) === null);
+check('never in a dry run', Engine::watermarkToWrite(null, $pos, 'success', ['dry_run' => true]) === null);
+check('never when --limit cut the list', Engine::watermarkToWrite(null, $pos, 'success', ['limit' => 50]) === null);
+check('never when the tickets module did not finish', Engine::watermarkToWrite(null, ['max_updated' => '2024-03-12T03:00:00Z'], 'success', []) === null);
+check('never when no ticket was seen', Engine::watermarkToWrite(null, ['tickets_complete' => true], 'success', []) === null);
+check('never backwards', Engine::watermarkToWrite('2024-03-20 00:00:00', $pos, 'success', []) === null && Engine::watermarkToWrite('2024-03-12 10:00:00', $pos, 'success', []) === null);
+
 done();

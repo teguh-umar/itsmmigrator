@@ -80,6 +80,7 @@ final class RunView
             . '<input class="form-control" type="number" min="0" id="itsm-limit" name="limit" value="50"></div>';
         echo '<div class="col-md-9"><label class="form-label">' . htmlescape(__('Options', 'itsmmigrator')) . '</label><div>';
         self::check('dry_run', __('Dry run (write nothing)', 'itsmmigrator'), true);
+        self::check('full', __('Read everything (ignore the watermark)', 'itsmmigrator'), false);
         self::check('retry_failed', __('Retry failed', 'itsmmigrator'), false);
         self::check('create_missing_users', __('Create missing users', 'itsmmigrator'), false);
         self::check('ldap_lookup', __('Directory lookup for users', 'itsmmigrator'), true);
