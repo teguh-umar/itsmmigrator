@@ -139,6 +139,43 @@ final class Lock
         ], ['id' => $runId]);
     }
 
+    /**
+     * The admin's "Release stale lock" button: abort `running` rows whose heartbeat is older than
+     * STALE_AFTER. A live run is never touched.
+     *
+     * @return int number of runs aborted
+     */
+    public static function releaseStale(): int
+    {
+        global $DB;
+        $running = [];
+        foreach ($DB->request(['FROM' => Run::getTable(), 'WHERE' => ['status' => 'running'], 'ORDER' => 'id']) as $row) {
+            $running[] = $row;
+        }
+        $verdict = self::evaluate($running, time(), true);
+        if (!$verdict['proceed'] || $verdict['abort_ids'] === []) {
+            return 0;
+        }
+        foreach ($verdict['abort_ids'] as $id) {
+            $DB->update(Run::getTable(), [
+                'status'      => 'aborted',
+                'finished_at' => date('Y-m-d H:i:s'),
+                'message'     => 'Lock released by an administrator: heartbeat older than 15 minutes',
+            ], ['id' => $id]);
+        }
+        return count($verdict['abort_ids']);
+    }
+
+    /** @return array<string,mixed>|null the run that holds the lock now, else null */
+    public static function current(): ?array
+    {
+        global $DB;
+        foreach ($DB->request(['FROM' => Run::getTable(), 'WHERE' => ['status' => 'running'], 'ORDER' => 'id DESC', 'LIMIT' => 1]) as $row) {
+            return $row;
+        }
+        return null;
+    }
+
     /** @return resource|false */
     private static function open()
     {

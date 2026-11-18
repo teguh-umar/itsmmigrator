@@ -1,4 +1,4 @@
-# Runbook: itsmmigrator (ITSM Migrator) 0.1.0-rc4
+# Runbook: itsmmigrator (ITSM Migrator) 0.1.0-rc5
 
 Run these steps in order. Every step says what a good result looks like. Stop at the first step that does not match and send the output back; do not skip ahead.
 
@@ -13,11 +13,11 @@ Facts used throughout:
 
 ## 0. Put the build in place
 
-Unpack `itsmmigratorv0.1.0-rc4.zip` so the folder is `<glpi>/plugins/itsmmigrator/` (the archive root is already `itsmmigrator/`), owned by the web-server user.
+Unpack `itsmmigratorv0.1.0-rc5.zip` so the folder is `<glpi>/plugins/itsmmigrator/` (the archive root is already `itsmmigrator/`), owned by the web-server user.
 
 ```bash
 cd <glpi>/plugins
-sudo unzip -o ~/itsmmigratorv0.1.0-rc4.zip
+sudo unzip -o ~/itsmmigratorv0.1.0-rc5.zip
 sudo chown -R <webuser>:<webuser> <glpi>/plugins/itsmmigrator
 ls <glpi>/plugins/itsmmigrator/setup.php
 ```
@@ -38,7 +38,7 @@ sudo -u <webuser> php bin/console plugin:list | grep -i itsmmigrator
 sudo -u <webuser> php bin/console cache:clear
 ```
 
-Good: install and activate report success; `plugin:list` shows `0.1.0-rc4` and `Enabled`. Clear the cache before opening any page of the plugin. Then log out and in again: GLPI reads profile rights and builds the menu at login, so ICT Tools > ITSM Migrator does not appear in an older session.
+Good: install and activate report success; `plugin:list` shows `0.1.0-rc5` and `Enabled`. Clear the cache before opening any page of the plugin. Then log out and in again: GLPI reads profile rights and builds the menu at login, so ICT Tools > ITSM Migrator does not appear in an older session.
 
 Check the three tables, the rights and the cron task:
 
@@ -107,6 +107,16 @@ Before trusting it, test with the few people you need: a read-only bind account 
 2. Set the Freshservice source inactive in the source form (keep its map rows: they are what links later sources to the same tickets).
 3. Do not run `plugins:itsmmigrator:purge`. It exists for rollback of a test and re-imports everything afterwards.
 
+## 8. Running from the browser (optional)
+
+ICT Tools > ITSM Migrator > Runs. Pick the source and the modules, leave **Dry run** ticked for the first look, set a limit, Start. The page works through the run in small batches and shows the log and the counters; Stop ends it and what was written stays (a later run resumes). The page needs `plugin_itsmmigrator_run` with Update.
+
+- If another run (CLI, cron or another browser) holds the lock, Start says who and since when. A run whose heartbeat is older than 15 minutes is shown as probably dead: **Release stale lock** frees it. A live run is never released.
+- The browser run needs access to the source's target entity. An administrator without it is told so before anything starts.
+- Needs review lists users the plugin would not guess. Pick the right GLPI user (a candidate, or any user) or "No GLPI user". Tickets already imported keep the fallback user; later imports use the choice.
+- A ticket that came from a source shows **External references** with a link back to it.
+
+Good: the page never shows an API key, a failed connection is reported on the page, and `plugins:itsmmigrator:verify` still ends clean after a browser run.
 ## What this build does not do
 
-ServiceDesk Plus (initial import, weekly sync, cross-source linking updates, read-only guard), the Run page, the Needs review picker and the External references tab are later milestones. Freshservice group membership is not read, and the source watermark is not advanced yet. The Freshservice field names are written from the API documentation and have not been checked against a real account.
+ServiceDesk Plus (initial import, weekly sync, cross-source linking updates, read-only guard) is a later milestone. Freshservice group membership is not read, and the source watermark is not advanced yet. The Freshservice field names are written from the API documentation and have not been checked against a real account.

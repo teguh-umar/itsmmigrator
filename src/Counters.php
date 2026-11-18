@@ -35,6 +35,24 @@ final class Counters
         return $out;
     }
 
+    /**
+     * Rebuild from a stored run's counters, so a web run can add to what earlier requests counted.
+     *
+     * @param array<string, array<string,int>> $data
+     */
+    public static function fromArray(array $data): self
+    {
+        $c = new self();
+        foreach ($data as $module => $row) {
+            foreach ((array) $row as $key => $n) {
+                if (in_array($key, self::KEYS, true) && (int) $n > 0) {
+                    $c->add((string) $module, (string) $key, (int) $n);
+                }
+            }
+        }
+        return $c;
+    }
+
     public function hasFailures(): bool
     {
         foreach ($this->data as $row) {

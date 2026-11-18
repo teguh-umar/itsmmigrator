@@ -5,7 +5,7 @@ A GLPI 11 plugin that brings data from an external ITSM tool into GLPI, with GLP
 - **Freshservice (API v2):** a one-time import of the history, before Freshservice is taken down.
 - **ManageEngine ServiceDesk Plus on-premises (REST API v3):** an initial import plus a weekly delta sync. *Not built yet (M4).*
 
-Status: release candidate `0.1.0-rc4`. See `CHANGELOG.md` for what each build contains and for the open items.
+Status: release candidate `0.1.0-rc5`. See `CHANGELOG.md` for what each build contains and for the open items.
 
 ## What it guarantees
 
@@ -29,6 +29,17 @@ php bin/console plugin:activate itsmmigrator
 ```
 
 Never upgrade it from Setup > Plugins in the browser. GLPI 11 has no cron console command: the weekly task (`SdpSync`) is registered **switched off** until the SDP adapter exists, and would run with `php front/cron.php --force SdpSync`.
+
+## Pages
+
+| Page | Right | What it does |
+|---|---|---|
+| ICT Tools > ITSM Migrator > ITSM sources | plugin_itsmmigrator_config | The source list and the source form (the API key is a password field, never shown again). |
+| ... > Runs | plugin_itsmmigrator_run | Start a run (a **dry run is ticked by default**), watch it, see which run holds the lock, release a **stale** lock, read the history. |
+| ... > Needs review | plugin_itsmmigrator_run | Source users that could not be matched without guessing: pick the right GLPI user, or No GLPI user. Only the mapping is written, never the user row. |
+| Ticket / Problem / Change > External references | _run or _config read | Every source the item came from: id, link back to it, how it got here, status, last change. Shown only when the item has references. |
+
+A run from the browser takes the same global lock as the CLI and works in small batches (10 tickets, or 100 of the others, per request) so no request outlives the browser limit; its position lives in the server-side session, so the browser only holds the run id. Large first imports are still best run from the CLI.
 
 ## Commands
 
@@ -66,4 +77,4 @@ The offline suites need the `mbstring` extension. The staging tools create throw
 
 ## Documentation
 
-The user manual is written by Copilot (hub §0 rule 9). The step-by-step deployment is `docs/runbook-v0.1.0-rc4.md`.
+The user manual is written by Copilot (hub §0 rule 9). The step-by-step deployment is `docs/runbook-v0.1.0-rc5.md`.

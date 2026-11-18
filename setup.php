@@ -7,7 +7,7 @@
  * @license GPL-3.0-or-later
  */
 
-define('PLUGIN_ITSMMIGRATOR_VERSION', '0.1.0-rc4');
+define('PLUGIN_ITSMMIGRATOR_VERSION', '0.1.0-rc5');
 define('PLUGIN_ITSMMIGRATOR_MIN_GLPI', '11.0.0');
 define('PLUGIN_ITSMMIGRATOR_MAX_GLPI', '11.0.99');
 
@@ -67,7 +67,8 @@ function plugin_init_itsmmigrator()
     $PLUGIN_HOOKS['config_page']['itsmmigrator'] = 'front/pgnsuite.settings.php?section=itsmmigrator';
     $PLUGIN_HOOKS[\GlpiPlugin\Pgnsuite\ConfigTab::HOOK]['itsmmigrator'] = 'GlpiPlugin\Itsmmigrator\SuiteConfig::section';
 
-    // No AssetTab: the "External references" tab (Ticket, Problem, Change) arrives with M4.
+    // No AssetTab. The "External references" tab sits on Ticket, Problem and Change; it shows only when the item has map rows.
+    Plugin::registerClass(\GlpiPlugin\Itsmmigrator\Tab\ExternalReferenceTab::class, ['addtabon' => ['Ticket', 'Problem', 'Change']]);
 
     // The rights matrix on Administration > Profiles.
     Plugin::registerClass(\GlpiPlugin\Itsmmigrator\Profile::class, ['addtabon' => 'Profile']);

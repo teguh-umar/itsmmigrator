@@ -21,10 +21,11 @@ interface SourceAdapterInterface
     public function testConnection(): array;
 
     /**
-     * One page of one module, pages numbered from 1 and requested in order. $since is UTC (null =
-     * everything). Items are the module's DTOs.
+     * One page of one module, pages numbered from 1. $since is UTC (null = everything). Items are the
+     * module's DTOs. $cursor is the $cursor of the previous Page (null for page 1); an adapter keeps NO
+     * paging state of its own, so a page can be fetched by a different process than the previous one.
      */
-    public function fetchPage(string $module, int $page, ?\DateTimeImmutable $since): Page;
+    public function fetchPage(string $module, int $page, ?\DateTimeImmutable $since, ?string $cursor = null): Page;
 
     /** Notes, tasks, worklogs, attachments and the resolution of one ticket. */
     public function fetchTicketChildren(string $ticketSrcId): TicketChildren;
