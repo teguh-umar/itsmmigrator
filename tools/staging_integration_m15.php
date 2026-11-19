@@ -53,6 +53,7 @@ $requests = [];
 $transport = function (string $url, array $h, ?string $sink) use (&$requests): array {
     if (str_contains($url, '/ticket_form_fields')) { return ['status' => 200, 'headers' => [], 'body' => '{"ticket_fields":[]}']; }
     $requests[] = $url;
+    if (preg_match('#/requesters/8700999998$#', $url)) { return ['status' => 200, 'headers' => [], 'body' => json_encode(['requester' => ['id' => 8700999998, 'first_name' => 'Nobody', 'last_name' => 'Matched', 'primary_email' => 'nobody@example.test']])]; }
     if (preg_match('#/tickets/' . TID . '/approvals#', $url)) {
         return ['status' => 200, 'headers' => [], 'body' => json_encode(['approvals' => [
             ['id' => 8_700_000_201, 'approval_status' => 'Approved', 'approver_id' => AP1, 'user_id' => AP2, 'level' => 1, 'latest_remark' => 'ok by one', 'created_at' => '2026-03-01T01:00:00Z', 'updated_at' => '2026-03-01T05:00:00Z'],
@@ -64,7 +65,7 @@ $transport = function (string $url, array $h, ?string $sink) use (&$requests): a
     if (preg_match('#/tickets/' . TID . '(\?|$)#', $url)) { return ['status' => 200, 'headers' => [], 'body' => '{"ticket":{"id":' . TID . '}}']; }
     if (preg_match('#/tickets/' . TID . '/#', $url)) { return ['status' => 200, 'headers' => [], 'body' => '{"conversations":[],"tasks":[],"time_entries":[]}']; }
     if (preg_match('#/api/v2/tickets\?#', $url)) {
-        return ['status' => 200, 'headers' => [], 'body' => json_encode(['tickets' => [['id' => TID, 'subject' => 's', 'description' => '<p>d</p>', 'status' => 2, 'priority' => 2, 'type' => 'Incident', 'created_at' => '2026-03-01T00:00:00Z', 'updated_at' => '2026-03-02T00:00:00Z']]])];
+        return ['status' => 200, 'headers' => [], 'body' => json_encode(['tickets' => [['id' => TID, 'subject' => 's', 'description' => '<p>d</p>', 'status' => 2, 'priority' => 2, 'type' => 'Incident', 'requester_id' => 8_700_999_998, 'created_at' => '2026-03-01T00:00:00Z', 'updated_at' => '2026-03-02T00:00:00Z']]])];
     }
     return ['status' => 200, 'headers' => [], 'body' => '{}'];
 };
@@ -99,6 +100,12 @@ chk('one approval step per level, named Level N', $names === ['Level 1', 'Level 
 $sub = (new DateTimeImmutable('2026-03-01T01:00:00Z'))->setTimezone(new DateTimeZone(date_default_timezone_get()))->format('Y-m-d H:i:s');
 chk('requester, dates and remarks carried over', (int) ($v[0]['users_id'] ?? 0) === $u2 && ($v[0]['comment_validation'] ?? '') === 'ok by one' && ($v[1]['comment_validation'] ?? '') === 'no by two' && ($v[0]['validation_date'] ?? null) !== null && array_key_exists('validation_date', $v[2] ?? []) && $v[2]['validation_date'] === null && ($v[0]['submission_date'] ?? '') === $sub, json_encode(array_map(fn ($r) => [$r['users_id'], $r['comment_validation'], $r['validation_date'], $r['submission_date']], $v)) . ' u2=' . $u2);
 chk('the log names no test user (ids and counts only)', array_filter($log, fn ($m) => str_contains($m, '-approver')) === []);
+
+// ---- 2b. the requester is not a GLPI user: the ticket has no requester, but its first line says who asked
+$row = $DB->request(['SELECT' => ['id', 'content'], 'FROM' => 'glpi_tickets', 'WHERE' => ['entities_id' => $entity]])->current();
+$plain = html_entity_decode(strip_tags(\Glpi\RichText\RichText::getSafeHtml((string) ($row['content'] ?? ''))));
+chk('unmatched requester: the first line of the ticket names who asked (name and e-mail from the source)', str_starts_with(ltrim($plain), 'Requester (source): Nobody Matched <nobody@example.test>'), substr($plain, 0, 90));
+chk('unmatched requester: no requester actor, the description follows the line', $count('glpi_tickets_users', ['tickets_id' => $row['id'], 'type' => 1]) === 0 && str_contains($plain, 'd'));
 
 // ---- 3. a second run adds nothing
 (new Engine($mkAdapter()))->run($fresh(['import_approvals' => true]), 'cli', ['tickets'], ['full' => true], $logger);

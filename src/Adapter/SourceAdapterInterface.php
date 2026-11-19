@@ -30,6 +30,14 @@ interface SourceAdapterInterface
     /** Notes, tasks, worklogs, attachments and the resolution of one ticket; its approvals only when $approvals (one more GET). */
     public function fetchTicketChildren(string $ticketSrcId, bool $approvals = false): TicketChildren;
 
+    /**
+     * Name and first e-mail of one source user, for the line a ticket keeps when its requester is not a GLPI user.
+     * One GET per distinct user, remembered; null when the source does not know the user or cannot be reached.
+     *
+     * @return array{name:string,email:string}|null
+     */
+    public function describeUser(string $userSrcId): ?array;
+
     /** Download one attachment into $destPath (a file under GLPI_TMP_DIR). */
     public function downloadAttachment(Dto\ExternalAttachment $attachment, string $destPath): void;
 }

@@ -160,9 +160,13 @@ final class TicketWriter
         $group     = UserRef::group($t->source, $t->groupSrcId);
         $category  = UserRef::category($t->source, $t->categoryPath);
 
+        $content = $t->content !== '' ? $t->content : '(no description)';
+        if ($t->requesterSrcId !== null && $t->requesterSrcId !== '' && UserRef::resolve($t->source, $t->requesterSrcId, $ctx, false) === 0) {
+            $content = self::requesterLine($this->adapterRef?->describeUser($t->requesterSrcId)) . $content;
+        }
         $input = [
             'name'                => Mapping::ticketTitle($prefix, $t->displayId ?? $t->srcId, $t->subject),
-            'content'             => $t->content !== '' ? $t->content : '(no description)',
+            'content'             => $content,
             'entities_id'         => $ctx->targetEntity(),
             'type'                => $type['value'],
             'urgency'             => $priority['value'],
@@ -190,6 +194,18 @@ final class TicketWriter
             $DB->update('glpi_tickets', ['entities_id' => $ctx->targetEntity()], ['id' => $ticketId]);
         }
         return $ticketId;
+    }
+
+    /**
+     * The first line of a ticket whose requester is not a GLPI user: who asked, as the source knows them, so the
+     * identity is never lost (a later run skips mapped tickets and could not add it). Pure.
+     *
+     * @param array{name:string,email:string}|null $who
+     */
+    public static function requesterLine(?array $who): string
+    {
+        $label = $who === null ? '' : trim($who['name'] . ($who['email'] !== '' ? ' <' . $who['email'] . '>' : ''));
+        return '<p><b>' . ($label !== '' ? 'Requester (source): ' . htmlspecialchars($label, ENT_QUOTES) : 'Requester (source): unknown, not readable') . '</b></p>';
     }
 
     /** Requester, assignee and assigned group, each only when missing. A 0 means "nobody" and adds nothing. */

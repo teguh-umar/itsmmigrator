@@ -152,6 +152,32 @@ final class FreshserviceAdapter implements SourceAdapterInterface
         }
         return new Page($items, false);
     }
+    /** @var array<string,array{name:string,email:string}|null> */
+    private array $described = [];
+
+    public function describeUser(string $userSrcId): ?array
+    {
+        if (array_key_exists($userSrcId, $this->described)) {
+            return $this->described[$userSrcId];
+        }
+        $isAgent = str_starts_with($userSrcId, 'agent:');
+        $id      = preg_replace('/^(agent|requester):/', '', $userSrcId);
+        $out     = null;
+        if (preg_match('/^\d{1,20}$/', (string) $id)) {
+            try {
+                $r  = $this->client->get(($isAgent ? '/agents/' : '/requesters/') . $id);
+                $u  = $r['json'][$isAgent ? 'agent' : 'requester'] ?? null;
+                if (is_array($u) && isset($u['id'])) {
+                    $x   = $isAgent ? self::agent($u) : self::requester($u);
+                    $out = ['name' => $x->name, 'email' => $x->emails[0] ?? ''];
+                }
+            } catch (\Throwable) {
+                $out = null; // the ticket is still created, without the line
+            }
+        }
+        return $this->described[$userSrcId] = $out;
+    }
+
     /** @param array<string,mixed> $a */
     public static function agent(array $a): ExternalUser
     {
