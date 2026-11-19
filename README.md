@@ -5,7 +5,7 @@ A GLPI 11 plugin that brings data from an external ITSM tool into GLPI, with GLP
 - **Freshservice (API v2):** a one-time import of the history, before Freshservice is taken down.
 - **ManageEngine ServiceDesk Plus on-premises (REST API v3):** an initial import plus a weekly delta sync. *Not built yet (M4).*
 
-Status: release candidate `0.1.0-rc12`. See `CHANGELOG.md` for what each build contains and for the open items.
+Status: release candidate `0.1.0-rc13`. See `CHANGELOG.md` for what each build contains and for the open items.
 
 ## What it guarantees
 
@@ -19,6 +19,8 @@ Status: release candidate `0.1.0-rc12`. See `CHANGELOG.md` for what each build c
 | Existing groups and categories are matched | What the target entity can already see (its own rows plus recursive rows of ancestor entities), nearest entity first. |
 | A delta, not a re-read | The source keeps a **watermark**: the newest `updated_at` of the last complete, successful run. The next run reads from the watermark minus 2 hours. It moves only after a real run that read the whole ticket list (not a dry run, not `--limit`) and ended success or partial; a fetch error leaves it alone; it never moves back. `--full`, `--retry-failed` and `--recreate-missing` read everything; `--since` wins over all. |
 | An early-phase scope | **Import only chosen ticket categories**: one path per line in the source form (`Hardware`, `Hardware > Laptop`; a path includes everything below it), or `--category="Hardware > Laptop"` (repeatable) on the CLI. Tickets of other categories are left out and get no map row, so widening the list later imports them; the category tree is created only for the chosen branches and their parents; a filtered run never moves the watermark. |
+| Reading past the 30,000 ticket cap | Freshservice serves at most 30,000 tickets per list query. The adapter reads in **windows**: when the last servable page is full, the next window starts at the update time of the last ticket seen. Nothing is lost; the ticket(s) of the second where a window starts are read twice and the second read is a no-op. The watermark moves only after **all** windows are done. If more than 30,000 tickets share one second the reader moves one second on and says so (those tickets cannot be read). |
+| Import in phases | Source option **Import tickets updated since** (`import_since`, a date; also in the source form) is the floor of a phase. Phase 1: set it to the newest period and run. A later, wider phase: lower the date and run with **Read everything** (`--full`): tickets already imported are skipped. A plain run after a phase is a delta from the watermark and never goes below the floor. |
 | Re-runnable | Resume (`in_progress`), `--retry-failed`, `--recreate-missing`. A second run with no source change changes nothing. |
 | Tables survive uninstall | Dropping the maps would make a reinstall import everything again. Only `plugins:itsmmigrator:purge --confirm` drops them. |
 
@@ -79,4 +81,4 @@ The offline suites need the `mbstring` extension. The staging tools create throw
 
 ## Documentation
 
-The user manual is written by Copilot (hub §0 rule 9). The step-by-step deployment is `docs/runbook-v0.1.0-rc12.md`.
+The user manual is written by Copilot (hub §0 rule 9). The step-by-step deployment is `docs/runbook-v0.1.0-rc13.md`.

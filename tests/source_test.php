@@ -42,4 +42,11 @@ check('base_url is trimmed, trailing slash removed', ($out['base_url'] ?? '') ==
 check('empty JSON field stored as NULL', array_key_exists('options', $out) && $out['options'] === null);
 check('plaintext key is never in the prepared input', !str_contains(json_encode($out), '"secret"'));
 
+// ---- import_since
+check('import_since: a date is accepted, an empty one too', Source::errors(['import_since' => '2026-01-01'] + $good, []) === [] && Source::errors(['import_since' => ''] + $good, []) === []);
+check('import_since: rubbish is refused', Source::errors(['import_since' => 'last year'] + $good, []) !== [] && Source::errors(['import_since' => '01/01/2026'] + $good, []) !== []);
+$o = json_decode((string) Source::prepare(['import_since' => '2026-01-01', 'ticket_categories_text' => "A\nB"], static fn ($s) => $s, ['options' => json_encode(['email_aliases' => [['a', 'b']]])])['options'], true);
+check('import_since and the category list are both kept in options, other options untouched', $o === ['email_aliases' => [['a', 'b']], 'ticket_categories' => ['A', 'B'], 'import_since' => '2026-01-01']);
+$o2 = Source::prepare(['import_since' => ''], static fn ($s) => $s, ['options' => json_encode(['import_since' => '2025-01-01'])]);
+check('import_since: emptying the field removes it (options become null when nothing else is left)', $o2['options'] === null);
 done();

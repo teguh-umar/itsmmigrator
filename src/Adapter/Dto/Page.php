@@ -16,6 +16,8 @@ final class Page
         public readonly array $items,
         public readonly bool $hasMore,
         public readonly ?string $cursor = null,
+        /** @var list<string> things the caller should log (never data: only counts and timestamps) */
+        public readonly array $notes = [],
     ) {
     }
 }

@@ -125,6 +125,11 @@ final class Engine
         }
 
         $result = $this->adapter->fetchPage($module, (int) $pos['page'], $since, $pos['cursor']);
+        if ((int) $pos['offset'] === 0) {
+            foreach ($result->notes as $note) {
+                $ctx->log($note);
+            }
+        }
         $slice  = array_slice($result->items, (int) $pos['offset'], max(1, $batch));
         $limitHit = false;
 
@@ -238,10 +243,11 @@ final class Engine
      * Where to start reading tickets (UTC). Pure.
      *
      * - an explicit `since` always wins;
-     * - `full`, `retry_failed` and `recreate_missing` read everything: a failed or missing ticket can be
-     *   older than the watermark, and the map makes re-reading harmless;
-     * - otherwise the source's watermark minus a 2 hour overlap (clock skew, tickets updated while the
-     *   last run was reading), or everything when there is no watermark yet.
+     * - `full`, `retry_failed` and `recreate_missing` read everything the source's `import_since` allows (everything
+     *   when it is not set): a failed or missing ticket can be older than the watermark, and the map makes re-reading
+     *   harmless. This is also how a LATER, wider phase is run: lower `import_since`, run with "read everything";
+     * - otherwise the source's watermark minus a 2 hour overlap (clock skew, tickets updated while the last run was
+     *   reading), but never earlier than `import_since`; with no watermark yet, `import_since`, else everything.
      *
      * @param array<string,mixed> $source
      * @param array<string,mixed> $flags
@@ -252,22 +258,37 @@ final class Engine
         if ($explicit !== null) {
             return $explicit;
         }
+        $floor = self::importSince($source);
         if (!empty($flags['full']) || !empty($flags['retry_failed']) || !empty($flags['recreate_missing'])) {
-            return null;
+            return $floor;
         }
         $wm = $source['watermark'] ?? null;
         if (!is_string($wm) || trim($wm) === '') {
+            return $floor;
+        }
+        try {
+            $fromWm = (new \DateTimeImmutable($wm, new \DateTimeZone(date_default_timezone_get())))
+                ->setTimezone(new \DateTimeZone('UTC'))
+                ->modify('-2 hours');
+        } catch (\Throwable) {
+            return $floor;
+        }
+        return $floor !== null && $floor > $fromWm ? $floor : $fromWm;
+    }
+
+    /** The source option `import_since` (a date or an ISO time, UTC), or null. Pure. @param array<string,mixed> $source */
+    public static function importSince(array $source): ?\DateTimeImmutable
+    {
+        $v = self::decodeOptions($source)['import_since'] ?? null;
+        if (!is_string($v) || trim($v) === '') {
             return null;
         }
         try {
-            return (new \DateTimeImmutable($wm, new \DateTimeZone(date_default_timezone_get())))
-                ->setTimezone(new \DateTimeZone('UTC'))
-                ->modify('-2 hours');
+            return (new \DateTimeImmutable(trim($v), new \DateTimeZone('UTC')))->setTimezone(new \DateTimeZone('UTC'));
         } catch (\Throwable) {
             return null;
         }
     }
-
     /**
      * The watermark to store after a run, or null to leave it alone (spec §8.4). Pure.
      *
