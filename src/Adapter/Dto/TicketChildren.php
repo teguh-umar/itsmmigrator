@@ -13,6 +13,7 @@ final class TicketChildren
      * @param string|null              $resolution   solution text, when the source has one
      * @param \DateTimeImmutable|null  $resolvedAt
      * @param \DateTimeImmutable|null  $closedAt
+     * @param list<ExternalApproval>   $approvals    only when the run asked for them (option import_approvals)
      */
     public function __construct(
         public readonly array $notes = [],
@@ -22,6 +23,7 @@ final class TicketChildren
         public readonly ?string $resolution = null,
         public readonly ?\DateTimeImmutable $resolvedAt = null,
         public readonly ?\DateTimeImmutable $closedAt = null,
+        public readonly array $approvals = [],
     ) {
     }
 }

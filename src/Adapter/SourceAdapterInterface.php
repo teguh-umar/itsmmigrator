@@ -27,8 +27,8 @@ interface SourceAdapterInterface
      */
     public function fetchPage(string $module, int $page, ?\DateTimeImmutable $since, ?string $cursor = null): Page;
 
-    /** Notes, tasks, worklogs, attachments and the resolution of one ticket. */
-    public function fetchTicketChildren(string $ticketSrcId): TicketChildren;
+    /** Notes, tasks, worklogs, attachments and the resolution of one ticket; its approvals only when $approvals (one more GET). */
+    public function fetchTicketChildren(string $ticketSrcId, bool $approvals = false): TicketChildren;
 
     /** Download one attachment into $destPath (a file under GLPI_TMP_DIR). */
     public function downloadAttachment(Dto\ExternalAttachment $attachment, string $destPath): void;

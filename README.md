@@ -5,7 +5,7 @@ A GLPI 11 plugin that brings data from an external ITSM tool into GLPI, with GLP
 - **Freshservice (API v2):** a one-time import of the history, before Freshservice is taken down.
 - **ManageEngine ServiceDesk Plus on-premises (REST API v3):** an initial import plus a weekly delta sync. *Not built yet (M4).*
 
-Status: release candidate `0.1.0-rc14`. See `CHANGELOG.md` for what each build contains and for the open items.
+Status: release candidate `0.1.0-rc15`. See `CHANGELOG.md` for what each build contains and for the open items.
 
 ## What it guarantees
 
@@ -81,4 +81,4 @@ The offline suites need the `mbstring` extension. The staging tools create throw
 
 ## Documentation
 
-The user manual is written by Copilot (hub §0 rule 9). The step-by-step deployment is `docs/runbook-v0.1.0-rc14.md`.
+The user manual is written by Copilot (hub §0 rule 9). The step-by-step deployment is `docs/runbook-v0.1.0-rc15.md`.

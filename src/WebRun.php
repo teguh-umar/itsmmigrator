@@ -25,7 +25,7 @@ final class WebRun
     private const FLAGS = [
         'dry_run' => 'bool', 'full' => 'bool', 'retry_failed' => 'bool', 'recreate_missing' => 'bool', 'create_missing_users' => 'bool',
         'activate_created_users' => 'bool', 'ldap_lookup' => 'bool', 'limit' => 'int', 'fallback_user' => 'int',
-        'assign_profiles' => 'profiles', 'since' => 'string', 'until' => 'string', 'date_basis' => 'basis',
+        'assign_profiles' => 'profiles', 'since' => 'string', 'until' => 'string', 'date_basis' => 'basis', 'approvals' => 'bool',
     ];
 
     /**

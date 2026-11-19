@@ -37,6 +37,7 @@ class RunCommand extends AbstractCommand
         $this->addOption('since', null, InputOption::VALUE_REQUIRED, 'ISO8601 start for tickets; default: the source watermark minus 2 hours, or everything without one');
         $this->addOption('until', null, InputOption::VALUE_REQUIRED, 'End of the import range: a date (the whole day) or an ISO time. With --since it gives a from-to range');
         $this->addOption('date-basis', null, InputOption::VALUE_REQUIRED, 'Which date the range is about: updated (default, last update) or created (the day the ticket was opened)');
+        $this->addOption('approvals', null, InputOption::VALUE_NONE, 'Also import the approvals of each ticket (one more request per ticket; the approver must already be a GLPI user)');
         $this->addOption('full', null, InputOption::VALUE_NONE, 'Read every ticket: ignore the source watermark');
         $this->addOption('dry-run', null, InputOption::VALUE_NONE, 'Read and match only, write nothing');
         $this->addOption('limit', null, InputOption::VALUE_REQUIRED, 'Stop each module after N items');
@@ -117,6 +118,7 @@ class RunCommand extends AbstractCommand
         $flags = [
             'dry_run'                => (bool) $input->getOption('dry-run'),
             'full'                   => (bool) $input->getOption('full'),
+            'approvals'              => $input->getOption('approvals') ? true : null,
             'retry_failed'           => (bool) $input->getOption('retry-failed'),
             'recreate_missing'       => (bool) $input->getOption('recreate-missing'),
             'force_unlock'           => (bool) $input->getOption('force-unlock'),

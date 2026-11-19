@@ -84,6 +84,7 @@ final class RunView
         echo '<div class="col-md-12"><label class="form-label">' . htmlescape(__('Options', 'itsmmigrator')) . '</label><div>';
         self::check('dry_run', __('Dry run (write nothing)', 'itsmmigrator'), true);
         self::check('full', __('Read everything (ignore the watermark)', 'itsmmigrator'), false);
+        self::check('approvals', __('Import approvals (one more request per ticket)', 'itsmmigrator'), false);
         self::check('retry_failed', __('Retry failed', 'itsmmigrator'), false);
         self::check('create_missing_users', __('Create missing users', 'itsmmigrator'), false);
         self::check('ldap_lookup', __('Directory lookup for users', 'itsmmigrator'), true);
