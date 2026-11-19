@@ -81,6 +81,12 @@ final class Context
         return $flag !== [] ? $flag : CategoryFilter::parse($this->options['ticket_categories'] ?? null);
     }
 
+    /** The import range of this run (from, until, which date): flags win over the source options. */
+    public function dateRange(): DateRange
+    {
+        return DateRange::fromSettings($this->options, $this->flags);
+    }
+
     public function log(string $message): void
     {
         ($this->logger)($message);

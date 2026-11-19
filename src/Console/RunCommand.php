@@ -35,6 +35,8 @@ class RunCommand extends AbstractCommand
         $this->addOption('category', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Import only tickets under this category path, e.g. "Hardware > Laptop" (repeatable; overrides the source option)');
         $this->addOption('modules', null, InputOption::VALUE_REQUIRED, 'Comma list of: ' . implode(',', Engine::MODULES) . ' (default: all supported)');
         $this->addOption('since', null, InputOption::VALUE_REQUIRED, 'ISO8601 start for tickets; default: the source watermark minus 2 hours, or everything without one');
+        $this->addOption('until', null, InputOption::VALUE_REQUIRED, 'End of the import range: a date (the whole day) or an ISO time. With --since it gives a from-to range');
+        $this->addOption('date-basis', null, InputOption::VALUE_REQUIRED, 'Which date the range is about: updated (default, last update) or created (the day the ticket was opened)');
         $this->addOption('full', null, InputOption::VALUE_NONE, 'Read every ticket: ignore the source watermark');
         $this->addOption('dry-run', null, InputOption::VALUE_NONE, 'Read and match only, write nothing');
         $this->addOption('limit', null, InputOption::VALUE_REQUIRED, 'Stop each module after N items');
@@ -67,6 +69,18 @@ class RunCommand extends AbstractCommand
         if ($ref === null || $ref === '') {
             $output->writeln('<error>--source is required (id or name)</error>');
             return self::FAILURE;
+        }
+        $basis = $input->getOption('date-basis');
+        if ($basis !== null && !in_array($basis, ['updated', 'created'], true)) {
+            $output->writeln('<error>--date-basis must be updated or created</error>');
+            return self::FAILURE;
+        }
+        foreach (['since', 'until'] as $opt) {
+            $v = $input->getOption($opt);
+            if ($v !== null && $v !== '' && \GlpiPlugin\Itsmmigrator\DateRange::parse($v, false) === null) {
+                $output->writeln("<error>--$opt: cannot read that date (use 2026-01-31 or an ISO time)</error>");
+                return self::FAILURE;
+            }
         }
         $profiles = $input->getOption('assign-profiles');
         if ($profiles !== null && !in_array($profiles, ['none', 'requester_only', 'all'], true)) {
@@ -113,6 +127,8 @@ class RunCommand extends AbstractCommand
             'assign_profiles'        => $profiles,
             'limit'                  => (int) ($input->getOption('limit') ?? 0),
             'since'                  => $input->getOption('since'),
+            'until'                  => $input->getOption('until'),
+            'date_basis'             => $basis,
             'categories'             => (array) $input->getOption('category'),
         ];
         $modules = $input->getOption('modules') !== null ? explode(',', (string) $input->getOption('modules')) : [];

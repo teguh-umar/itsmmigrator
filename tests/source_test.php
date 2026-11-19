@@ -2,7 +2,7 @@
 
 require __DIR__ . '/bootstrap.php';
 require __DIR__ . '/fixtures/glpi_stubs.php';
-load_src('RightDefinition', 'Source');
+load_src('RightDefinition', 'DateRange', 'Source');
 
 use GlpiPlugin\Itsmmigrator\Source;
 
@@ -49,4 +49,12 @@ $o = json_decode((string) Source::prepare(['import_since' => '2026-01-01', 'tick
 check('import_since and the category list are both kept in options, other options untouched', $o === ['email_aliases' => [['a', 'b']], 'ticket_categories' => ['A', 'B'], 'import_since' => '2026-01-01']);
 $o2 = Source::prepare(['import_since' => ''], static fn ($s) => $s, ['options' => json_encode(['import_since' => '2025-01-01'])]);
 check('import_since: emptying the field removes it (options become null when nothing else is left)', $o2['options'] === null);
+// ---- import_until / import_date_basis
+check('import_until: a date is accepted, rubbish refused', Source::errors(['import_until' => '2026-01-31'] + $good, []) === [] && Source::errors(['import_until' => 'soon'] + $good, []) !== []);
+check('import_date_basis: updated, created or empty only', Source::errors(['import_date_basis' => 'created'] + $good, []) === [] && Source::errors(['import_date_basis' => 'updated'] + $good, []) === [] && Source::errors(['import_date_basis' => ''] + $good, []) === [] && Source::errors(['import_date_basis' => 'whenever'] + $good, []) !== []);
+check('a start date after the end date is refused', Source::errors(['import_since' => '2026-02-01', 'import_until' => '2026-01-31'] + $good, []) !== [] && Source::errors(['import_since' => '2026-01-01', 'import_until' => '2026-01-31'] + $good, []) === []);
+$o = json_decode((string) Source::prepare(['import_since' => '2026-01-01', 'import_until' => '2026-01-31', 'import_date_basis' => 'created'], static fn ($s) => $s, ['options' => json_encode(['email_aliases' => [['a', 'b']]])])['options'], true);
+check('range settings are kept in options next to the others', $o === ['email_aliases' => [['a', 'b']], 'import_since' => '2026-01-01', 'import_until' => '2026-01-31', 'import_date_basis' => 'created']);
+$o3 = Source::prepare(['import_until' => '', 'import_date_basis' => 'updated'], static fn ($s) => $s, ['options' => json_encode(['import_until' => '2026-01-31', 'import_date_basis' => 'created'])]);
+check('emptying the end date / choosing "updated" (the default) removes them', $o3['options'] === null);
 done();

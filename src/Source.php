@@ -133,6 +133,18 @@ class Source extends CommonDBTM
                 implode(', ', $otherActive)
             );
         }
+        // The end of the range and which date it is about.
+        if (array_key_exists('import_until', $input) && trim((string) $input['import_until']) !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}(:\d{2})?Z?)?$/', trim((string) $input['import_until']))) {
+            $errors[] = __('Import tickets until: use a date like 2026-01-31.', 'itsmmigrator');
+        }
+        if (array_key_exists('import_date_basis', $input) && !in_array((string) $input['import_date_basis'], ['', 'updated', 'created'], true)) {
+            $errors[] = __('Unknown date to use for the range.', 'itsmmigrator');
+        }
+        if (trim((string) ($input['import_since'] ?? '')) !== '' && trim((string) ($input['import_until'] ?? '')) !== ''
+            && DateRange::parse($input['import_since'], false) !== null && DateRange::parse($input['import_until'], true) !== null
+            && DateRange::parse($input['import_since'], false) > DateRange::parse($input['import_until'], true)) {
+            $errors[] = __('The start date is after the end date.', 'itsmmigrator');
+        }
         // Import tickets updated since: a date (or an ISO time), checked before it is stored in the options.
         if (array_key_exists('import_since', $input) && trim((string) $input['import_since']) !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}(:\d{2})?Z?)?$/', trim((string) $input['import_since']))) {
             $errors[] = __('Import tickets updated since: use a date like 2026-01-01.', 'itsmmigrator');
@@ -177,7 +189,7 @@ class Source extends CommonDBTM
         }
         // Two settings live in the options JSON and have their own form fields: the category list (one path per line)
         // and the "import tickets updated since" date. Everything else in options is kept as it is.
-        if (array_key_exists('ticket_categories_text', $input) || array_key_exists('import_since', $input)) {
+        if (array_key_exists('ticket_categories_text', $input) || array_key_exists('import_since', $input) || array_key_exists('import_until', $input) || array_key_exists('import_date_basis', $input)) {
             $options = json_decode((string) ($input['options'] ?? $stored['options'] ?? ''), true);
             $options = is_array($options) ? $options : [];
             if (array_key_exists('ticket_categories_text', $input)) {
@@ -197,6 +209,17 @@ class Source extends CommonDBTM
                     $options['import_since'] = $d;
                 }
                 unset($input['import_since']);
+            }
+            foreach (['import_until', 'import_date_basis'] as $key) {
+                if (array_key_exists($key, $input)) {
+                    $v = trim((string) $input[$key]);
+                    if ($v === '' || ($key === 'import_date_basis' && $v === 'updated')) {
+                        unset($options[$key]); // empty = off; "updated" is the default
+                    } else {
+                        $options[$key] = $v;
+                    }
+                    unset($input[$key]);
+                }
             }
             $input['options'] = $options === [] ? null : json_encode($options, JSON_UNESCAPED_UNICODE);
         }        if (array_key_exists('base_url', $input)) {
@@ -313,6 +336,14 @@ class Source extends CommonDBTM
         echo '<div class="mb-2" style="max-width:20rem"><label class="form-label" for="itsmmigrator-src-since">' . __s('Import tickets updated since', 'itsmmigrator') . '</label>';
         echo '<input type="date" class="form-control" id="itsmmigrator-src-since" name="import_since" value="' . htmlescape($sinceVal) . '"' . $dis . '>';
         echo '<div class="form-text">' . __s('Tickets last updated before this date are left out. To add an older period later, lower the date and run with "Read everything": tickets already imported are skipped.', 'itsmmigrator') . '</div></div>';
+        $untilVal = is_array($optsAll) ? (string) ($optsAll['import_until'] ?? '') : '';
+        $basisVal = is_array($optsAll) ? (string) ($optsAll['import_date_basis'] ?? 'updated') : 'updated';
+        echo '<div class="mb-2" style="max-width:20rem"><label class="form-label" for="itsmmigrator-src-until">' . __s('Import tickets until', 'itsmmigrator') . '</label>';
+        echo '<input type="date" class="form-control" id="itsmmigrator-src-until" name="import_until" value="' . htmlescape($untilVal) . '"' . $dis . '>';
+        echo '<div class="form-text">' . __s('Empty = no end date. With both dates, only that period is imported (the whole end day counts).', 'itsmmigrator') . '</div></div>';
+        echo '<div class="mb-2" style="max-width:20rem"><label class="form-label" for="itsmmigrator-src-basis">' . __s('The dates are about', 'itsmmigrator') . '</label><select class="form-select" id="itsmmigrator-src-basis" name="import_date_basis"' . $dis . '>';
+        echo '<option value="updated"' . ($basisVal !== 'created' ? ' selected' : '') . '>' . __s('the last update of the ticket (faster)', 'itsmmigrator') . '</option>';
+        echo '<option value="created"' . ($basisVal === 'created' ? ' selected' : '') . '>' . __s('the day the ticket was created (reads more, slower)', 'itsmmigrator') . '</option></select></div>';
         $opts = json_decode((string) ($f['options'] ?? ''), true);
         $catsText = is_array($opts) && is_array($opts['ticket_categories'] ?? null) ? implode("\n", array_map('strval', $opts['ticket_categories'])) : '';
         echo '<div class="mb-2"><label class="form-label" for="itsmmigrator-src-cats">' . __s('Import only these ticket categories', 'itsmmigrator') . '</label>';
