@@ -36,6 +36,7 @@ foreach ($ddl as $table => $sql) {
     $byTable[$short] = $cols;
 }
 
+check('maps: src_id holds a long category path (255), and an upgrade widens an old 64 column', str_contains($ddl['glpi_plugin_itsmmigrator_maps'], "`src_id` VARCHAR(255)") && str_contains((string) file_get_contents(ITSM_ROOT . '/install/install.php'), 'MODIFY `src_id` VARCHAR(255)'));
 check('maps: UNIQUE (source, src_type, src_id)',
     str_contains($ddl['glpi_plugin_itsmmigrator_maps'], 'UNIQUE KEY `src` (`source`, `src_type`, `src_id`)'));
 check('maps: (itemtype, items_id) key is NOT unique',
@@ -43,7 +44,7 @@ check('maps: (itemtype, items_id) key is NOT unique',
 check('maps: origin_ref and status keys',
     str_contains($ddl['glpi_plugin_itsmmigrator_maps'], 'KEY `origin_ref` (`origin_ref`)')
     && str_contains($ddl['glpi_plugin_itsmmigrator_maps'], 'KEY `status` (`status`)'));
-check('maps: src_id is a string (SDP ids are long)', str_starts_with($byTable['maps']['src_id'] ?? '', 'VARCHAR(64)'));
+check('maps: src_id is a string (SDP ids are long)', str_starts_with($byTable['maps']['src_id'] ?? '', 'VARCHAR(255)'));
 check('sources: api_key is TEXT NULL', ($byTable['sources']['api_key'] ?? '') === 'TEXT NULL');
 check('sources: entities_id has no zero-means-root escape in DDL (validated in Source::errors)', isset($byTable['sources']['entities_id']));
 check('sources: no is_recursive column (a source is never recursive)', !isset($byTable['sources']['is_recursive']));

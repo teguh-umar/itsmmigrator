@@ -1,4 +1,4 @@
-# Runbook: itsmmigrator (ITSM Migrator) 0.1.0-rc16
+# Runbook: itsmmigrator (ITSM Migrator) 0.1.0-rc17
 
 Run these steps in order. Every step says what a good result looks like. Stop at the first step that does not match and send the output back; do not skip ahead.
 
@@ -13,11 +13,11 @@ Facts used throughout:
 
 ## 0. Put the build in place
 
-Unpack `itsmmigratorv0.1.0-rc16.zip` so the folder is `<glpi>/plugins/itsmmigrator/` (the archive root is already `itsmmigrator/`), owned by the web-server user.
+Unpack `itsmmigratorv0.1.0-rc17.zip` so the folder is `<glpi>/plugins/itsmmigrator/` (the archive root is already `itsmmigrator/`), owned by the web-server user.
 
 ```bash
 cd <glpi>/plugins
-sudo unzip -o ~/itsmmigratorv0.1.0-rc16.zip
+sudo unzip -o ~/itsmmigratorv0.1.0-rc17.zip
 sudo chown -R <webuser>:<webuser> <glpi>/plugins/itsmmigrator
 ls <glpi>/plugins/itsmmigrator/setup.php
 ```
@@ -38,7 +38,7 @@ sudo -u <webuser> php bin/console plugin:list | grep -i itsmmigrator
 sudo -u <webuser> php bin/console cache:clear
 ```
 
-Good: install and activate report success; `plugin:list` shows `0.1.0-rc16` and `Enabled`. Clear the cache before opening any page of the plugin. Then log out and in again: GLPI reads profile rights and builds the menu at login, so ICT Tools > ITSM Migrator does not appear in an older session.
+Good: install and activate report success; `plugin:list` shows `0.1.0-rc17` and `Enabled`. Clear the cache before opening any page of the plugin. Then log out and in again: GLPI reads profile rights and builds the menu at login, so ICT Tools > ITSM Migrator does not appear in an older session.
 
 Check the three tables, the rights and the cron task:
 

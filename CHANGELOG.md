@@ -1,4 +1,9 @@
 # Changelog
+## 0.1.0-rc17
+
+- **Fix: a long category path no longer fails the run.** The map table's `src_id` was `VARCHAR(64)`, but a category's source id is its whole path (`Network > Network Security > Endpoint Protection (Anti Virus)`...) and some real paths are longer: the first real run of phase 1 failed in the categories module with "Data too long for column 'src_id'" (the dry run writes no map rows, so it could not show it). `src_id` is now `VARCHAR(255)`; a new install creates it so, and install/upgrade widens an existing column in place (idempotent, every row kept). Users (1,304 from the directory) and groups (38) written by that run stay, and a run again skips what is mapped.
+- **Tests.** schema_test checks the width and the upgrade step (47). Offline suite OK.
+
 ## 0.1.0-rc16
 
 - **A ticket never loses who asked.** When a ticket's requester is not a GLPI user (no match by e-mail, login or directory, and users are not created), the ticket is created with no requester (or the fallback user, when one is given) and its description now starts with a line `Requester (source): Name <e-mail>`, read once per distinct user from the source (`SourceAdapterInterface::describeUser`, one GET `/requesters/{id}` or `/agents/{id}`, remembered for the run; "unknown, not readable" when the source cannot answer, never an error). Found at the first real run of phase 1 (about 7,100 of 8,574 users unmatched): a later run skips tickets already mapped, so the identity could not have been added afterwards. The real run was stopped before any ticket was written.
