@@ -78,7 +78,10 @@ final class RunView
 
         echo '<div class="col-md-3"><label class="form-label" for="itsm-limit">' . htmlescape(__('Limit per module (0 = all)', 'itsmmigrator')) . '</label>'
             . '<input class="form-control" type="number" min="0" id="itsm-limit" name="limit" value="50"></div>';
-        echo '<div class="col-md-9"><label class="form-label">' . htmlescape(__('Options', 'itsmmigrator')) . '</label><div>';
+        echo '<div class="col-md-3"><label class="form-label" for="itsm-since">' . htmlescape(__('From (date)', 'itsmmigrator')) . '</label><input class="form-control" type="date" id="itsm-since" name="since"></div>';
+        echo '<div class="col-md-3"><label class="form-label" for="itsm-until">' . htmlescape(__('Until (date)', 'itsmmigrator')) . '</label><input class="form-control" type="date" id="itsm-until" name="until"></div>';
+        echo '<div class="col-md-3"><label class="form-label" for="itsm-basis">' . htmlescape(__('The dates are about', 'itsmmigrator')) . '</label><select class="form-select" id="itsm-basis" name="date_basis"><option value="updated">' . htmlescape(__('last update', 'itsmmigrator')) . '</option><option value="created">' . htmlescape(__('creation day', 'itsmmigrator')) . '</option></select></div>';
+        echo '<div class="col-md-12"><label class="form-label">' . htmlescape(__('Options', 'itsmmigrator')) . '</label><div>';
         self::check('dry_run', __('Dry run (write nothing)', 'itsmmigrator'), true);
         self::check('full', __('Read everything (ignore the watermark)', 'itsmmigrator'), false);
         self::check('retry_failed', __('Retry failed', 'itsmmigrator'), false);

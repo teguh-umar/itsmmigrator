@@ -133,7 +133,22 @@ final class Engine
         $slice  = array_slice($result->items, (int) $pos['offset'], max(1, $batch));
         $limitHit = false;
 
+        $range    = $module === 'tickets' ? $ctx->dateRange() : null;
+        $rangeEnd = false;
         foreach ($slice as $item) {
+            if ($range !== null && $item instanceof ExternalTicket) {
+                if ($range->pastEnd($item->updatedAt)) {
+                    $rangeEnd = true; // ascending by update time: nothing after this ticket is in range
+                    $ctx->log('Module tickets: the end date was reached');
+                    break;
+                }
+                if (!$range->allows($item->createdAt, $item->updatedAt)) {
+                    $ctx->counters->add($module, 'fetched');
+                    $ctx->counters->add($module, 'skipped');
+                    $pos['seen']++;
+                    continue;
+                }
+            }
             $ctx->counters->add($module, 'fetched');
             $this->dispatch($module, $item, $ctx);
             if ($module === 'tickets' && $item->updatedAt !== null) {
@@ -152,9 +167,9 @@ final class Engine
         $pos['offset'] += count($slice);
 
         $pageDone = $pos['offset'] >= count($result->items);
-        if ($limitHit || ($pageDone && !$result->hasMore)) {
+        if ($limitHit || $rangeEnd || ($pageDone && !$result->hasMore)) {
             $ctx->log("Module $module: done");
-            if ($module === 'tickets' && !$limitHit) {
+            if ($module === 'tickets' && !$limitHit && !$rangeEnd) {
                 $pos['tickets_complete'] = true; // the whole list was read: the high-water mark is trustworthy
             }
             $pos['mi']++;
@@ -259,6 +274,10 @@ final class Engine
             return $explicit;
         }
         $floor = self::importSince($source);
+        // Reading by creation date re-reads from the start date every time: the source's watermark is an UPDATE time.
+        if (DateRange::fromSettings(self::decodeOptions($source), $flags)->basis === DateRange::CREATED) {
+            return $floor;
+        }
         if (!empty($flags['full']) || !empty($flags['retry_failed']) || !empty($flags['recreate_missing'])) {
             return $floor;
         }
@@ -333,7 +352,9 @@ final class Engine
     public static function advanceWatermark(array $source, array $pos, string $status, array $flags, callable $log): void
     {
         global $DB;
-        $flags['category_filter'] = (new Context($source, self::decodeOptions($source), $flags, new Counters()))->categoryFilter() !== [];
+        $scope = new Context($source, self::decodeOptions($source), $flags, new Counters());
+        // A category filter and an end date / created-date reading both leave tickets unseen: the watermark stays put.
+        $flags['category_filter'] = $scope->categoryFilter() !== [] || $scope->dateRange()->limitsTheRun();
         $new = self::watermarkToWrite(isset($source['watermark']) ? (string) $source['watermark'] : null, $pos, $status, $flags);
         if ($new === null) {
             return;

@@ -1,7 +1,7 @@
 <?php
 
 require __DIR__ . '/bootstrap.php';
-foreach (['Counters', 'Writer/UserWriter', 'Engine'] as $f) {
+foreach (['Counters', 'DateRange', 'Writer/UserWriter', 'Engine'] as $f) {
     require_once ITSM_ROOT . "/src/$f.php";
 }
 

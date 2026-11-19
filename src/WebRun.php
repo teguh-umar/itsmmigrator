@@ -25,7 +25,7 @@ final class WebRun
     private const FLAGS = [
         'dry_run' => 'bool', 'full' => 'bool', 'retry_failed' => 'bool', 'recreate_missing' => 'bool', 'create_missing_users' => 'bool',
         'activate_created_users' => 'bool', 'ldap_lookup' => 'bool', 'limit' => 'int', 'fallback_user' => 'int',
-        'assign_profiles' => 'profiles', 'since' => 'string',
+        'assign_profiles' => 'profiles', 'since' => 'string', 'until' => 'string', 'date_basis' => 'basis',
     ];
 
     /**
@@ -47,6 +47,7 @@ final class WebRun
                 'bool'     => in_array($v, [true, 1, '1', 'true', 'on'], true),
                 'int'      => max(0, (int) $v),
                 'profiles' => in_array($v, ['none', 'requester_only', 'all'], true) ? $v : null,
+                'basis'    => in_array($v, ['updated', 'created'], true) ? $v : null,
                 default    => is_string($v) ? trim($v) : null,
             };
         }
@@ -77,6 +78,9 @@ final class WebRun
         $flags = self::cleanFlags($rawFlags);
         try {
             Engine::parseSince($flags['since'] ?? null); // refuse a bad date now, not in the middle of the run
+            if ((string) ($flags['until'] ?? '') !== '' && DateRange::parse($flags['until'], true) === null) {
+                return ['success' => false, 'message' => __('The end date cannot be read: use a date like 2026-01-31.', 'itsmmigrator')];
+            }
             $adapter = AdapterFactory::make($source->fields, $source->apiKey());
             $test = $adapter->testConnection();
             if (!$test['ok']) {
