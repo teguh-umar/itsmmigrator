@@ -118,7 +118,7 @@ chk('dry run: no ticket, no approvals request', $tickets() === 0 && $asks() === 
 AdapterFactory::setOverride(null);
 $wipe();
 foreach ($mapUsers as $m) { $DB->delete('glpi_plugin_itsmmigrator_maps', ['source' => 'freshservice', 'src_type' => 'user', 'src_id' => $m]); }
-foreach ([$u1, $u2] as $uid) { $DB->delete('glpi_users', ['id' => $uid]); }
+foreach ([$u1, $u2] as $uid) { (new User())->delete(['id' => $uid], true); $DB->delete('glpi_profiles_users', ['users_id' => $uid]); } // purge through core, and never leave a profile row behind
 $DB->delete('glpi_plugin_itsmmigrator_runs', ['sources_id' => $sid]);
 $DB->delete('glpi_plugin_itsmmigrator_sources', ['id' => $sid]);
 $DB->delete('glpi_entities', ['id' => $entity]);
