@@ -1,4 +1,9 @@
 # Changelog
+## 0.1.0-rc12
+
+- **A dropped connection no longer fails a long import.** Reading the whole Freshservice account takes many minutes and hundreds of requests; on the real account a connection reset and a connect timeout each killed a read in the middle. `FreshserviceClient` now repeats a request that failed on the network (up to 4 times, waiting 2, 4, 8, 16 s); only network failures are repeated, never a refusal or a configuration error, and every request is a GET so repeating is safe.
+- **Finding, not yet handled: Freshservice returns at most 30,000 tickets per list query** (300 pages of 100). A statistics read of the real account stopped exactly at that cap: the 30,000 oldest tickets by update time (2019 to 2021, 85 % Incident, 15 % Service Request, all Closed but 5). The adapter stops with a clear error at page 301; a full import therefore needs windowed reads (a new `since` from the last update seen) which is not built yet. The old tickets also use an older category tree than the current one (for example "Software", "Hardware", "Email" at the top), so a category filter has to name those too.
+
 ## 0.1.0-rc11
 
 - **Freshservice HTML-escapes plain-text names; they are now decoded.** The real category tree carries entities (for example `... &amp; ...`), and the ticket's own `category` fields do the same. Left as is, GLPI would have received categories, groups and users with `&amp;` in their names, and a category filter typed with `&` would never match. The adapter now decodes category and choice words, ticket subjects, group names and user names, and the category filter decodes what the administrator types as well, so `&` and `&amp;` are the same thing. Pinned by tests.

@@ -18,6 +18,7 @@ final class FreshserviceClient
 {
     public const PER_PAGE    = 100;
     public const MAX_RETRIES = 5;
+    public const MAX_NETWORK_RETRIES = 4;
 
     /** @var callable(string,array<int,string>,?string):array{status:int,headers:array<string,string>,body:string} */
     private $transport;
@@ -101,9 +102,22 @@ final class FreshserviceClient
     private function request(string $url, array $headers, ?string $sink): array
     {
         $attempt = 0;
+        $netAttempt = 0;
         while (true) {
             $this->throttle();
-            $res = ($this->transport)($url, $headers, $sink);
+            try {
+                $res = ($this->transport)($url, $headers, $sink);
+            } catch (ClientException $e) {
+                // A dropped or timed-out connection on a long import is routine (found on a real account: a reset in the
+                // middle of 90 pages). Every request is a GET, so repeating it is safe.
+                $this->lastRequestAt = microtime(true);
+                if ($e->reason === 'network' && $netAttempt < self::MAX_NETWORK_RETRIES) {
+                    ($this->sleeper)((float) (2 ** ($netAttempt + 1)));
+                    $netAttempt++;
+                    continue;
+                }
+                throw $e;
+            }
             $this->lastRequestAt = microtime(true);
             $st = (int) $res['status'];
 
