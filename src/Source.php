@@ -189,7 +189,7 @@ class Source extends CommonDBTM
         }
         // Two settings live in the options JSON and have their own form fields: the category list (one path per line)
         // and the "import tickets updated since" date. Everything else in options is kept as it is.
-        if (array_key_exists('ticket_categories_text', $input) || array_key_exists('import_since', $input) || array_key_exists('import_until', $input) || array_key_exists('import_date_basis', $input)) {
+        if (array_key_exists('ticket_categories_text', $input) || array_key_exists('import_since', $input) || array_key_exists('import_until', $input) || array_key_exists('import_date_basis', $input) || array_key_exists('import_approvals', $input)) {
             $options = json_decode((string) ($input['options'] ?? $stored['options'] ?? ''), true);
             $options = is_array($options) ? $options : [];
             if (array_key_exists('ticket_categories_text', $input)) {
@@ -209,6 +209,14 @@ class Source extends CommonDBTM
                     $options['import_since'] = $d;
                 }
                 unset($input['import_since']);
+            }
+            if (array_key_exists('import_approvals', $input)) {
+                if (empty($input['import_approvals'])) {
+                    unset($options['import_approvals']);
+                } else {
+                    $options['import_approvals'] = true;
+                }
+                unset($input['import_approvals']);
             }
             foreach (['import_until', 'import_date_basis'] as $key) {
                 if (array_key_exists($key, $input)) {
@@ -345,6 +353,7 @@ class Source extends CommonDBTM
         echo '<option value="updated"' . ($basisVal !== 'created' ? ' selected' : '') . '>' . __s('the last update of the ticket (faster)', 'itsmmigrator') . '</option>';
         echo '<option value="created"' . ($basisVal === 'created' ? ' selected' : '') . '>' . __s('the day the ticket was created (reads more, slower)', 'itsmmigrator') . '</option></select></div>';
         $opts = json_decode((string) ($f['options'] ?? ''), true);
+        echo '<div class="mb-2"><input type="hidden" name="import_approvals" value="0"><label class="form-check"><input type="checkbox" class="form-check-input" name="import_approvals" value="1"' . (is_array($opts) && !empty($opts['import_approvals']) ? ' checked' : '') . $dis . '> ' . __s('Import the approvals of each ticket (one more request per ticket; the approver must already be a GLPI user)', 'itsmmigrator') . '</label></div>';
         $catsText = is_array($opts) && is_array($opts['ticket_categories'] ?? null) ? implode("\n", array_map('strval', $opts['ticket_categories'])) : '';
         echo '<div class="mb-2"><label class="form-label" for="itsmmigrator-src-cats">' . __s('Import only these ticket categories', 'itsmmigrator') . '</label>';
         echo '<textarea class="form-control" rows="3" id="itsmmigrator-src-cats" name="ticket_categories_text" placeholder="' . htmlescape(__('One category path per line, e.g. Hardware > Laptop. Empty = all categories.', 'itsmmigrator')) . '"' . $dis . '>' . htmlescape($catsText) . '</textarea>';

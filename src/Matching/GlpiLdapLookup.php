@@ -23,8 +23,14 @@ final class GlpiLdapLookup implements LdapLookupInterface
     /** @var callable(string):void */
     private $logger;
 
+    /** Searches on one connection before a fresh one is opened: long loops make the directory refuse a tired connection. */
+    public const RECONNECT_EVERY = 250;
+
     /** @var array<int,true> directories that failed: not retried for every user of the run */
     private array $down = [];
+
+    /** @var array<int,array{ds:mixed,cfg:\AuthLDAP,n:int}> the open connection of each directory and its search count */
+    private array $conn = [];
 
     public function __construct(?callable $logger = null)
     {
@@ -38,21 +44,16 @@ final class GlpiLdapLookup implements LdapLookupInterface
             if (isset($this->down[$serverId])) {
                 continue;
             }
-            $cfg = new \AuthLDAP();
-            if (!$cfg->getFromDB($serverId)) {
-                continue;
-            }
-            $ds = self::quiet(static fn () => $cfg->connect(), $failed);
-            if (!$ds || $failed) {
+            if ($this->connection($serverId) === null) {
                 $this->markDown($serverId, 'not reachable or bind refused');
                 continue;
             }
 
             foreach (self::attempts($emails, $login) as [$method, $value]) {
                 $error = false;
-                $hit   = $this->search($ds, $cfg, $method, $value, $error);
+                $hit   = $this->searchOn($serverId, $method, $value, $error);
                 if ($error) {
-                    $this->markDown($serverId, 'search failed');
+                    $this->markDown($serverId, 'search failed after a fresh connection');
                     break;
                 }
                 if ($hit === null) {
@@ -83,6 +84,61 @@ final class GlpiLdapLookup implements LdapLookupInterface
             }
         }
         return null;
+    }
+
+    /**
+     * The open connection of a directory, a fresh one when none is open, or when $fresh is set, or after
+     * RECONNECT_EVERY searches. null = cannot connect or bind.
+     *
+     * @return array{ds:mixed,cfg:\AuthLDAP,n:int}|null
+     */
+    private function connection(int $serverId, bool $fresh = false): ?array
+    {
+        $c = $this->conn[$serverId] ?? null;
+        if ($c !== null && !$fresh && $c['n'] < self::RECONNECT_EVERY) {
+            return $c;
+        }
+        unset($this->conn[$serverId]);
+        $cfg = $c['cfg'] ?? new \AuthLDAP();
+        if ($c === null && !$cfg->getFromDB($serverId)) {
+            return null;
+        }
+        $ds = self::quiet(static fn () => $cfg->connect(), $failed);
+        if (!$ds || $failed) {
+            return null;
+        }
+        return $this->conn[$serverId] = ['ds' => $ds, 'cfg' => $cfg, 'n' => 0];
+    }
+
+    /**
+     * One search; a failure is answered with ONE fresh connection and a retry before the directory is given up.
+     *
+     * @param bool $error set true only when the retry on a fresh connection failed too
+     * @return array{dn:string, login:string}|null
+     */
+    private function searchOn(int $serverId, string $method, string $value, bool &$error): ?array
+    {
+        $c = $this->connection($serverId);
+        if ($c === null) {
+            $error = true;
+            return null;
+        }
+        $this->conn[$serverId]['n']++;
+        $err = false;
+        $hit = $this->search($c['ds'], $c['cfg'], $method, $value, $err);
+        if (!$err) {
+            return $hit;
+        }
+        $c = $this->connection($serverId, true);
+        if ($c === null) {
+            $error = true;
+            return null;
+        }
+        $this->conn[$serverId]['n']++;
+        $err = false;
+        $hit = $this->search($c['ds'], $c['cfg'], $method, $value, $err);
+        $error = $err;
+        return $err ? null : $hit;
     }
 
     /**

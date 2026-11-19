@@ -8,7 +8,7 @@ use GlpiPlugin\Itsmmigrator\MapRepository;
 /** Resolve a source user reference to a GLPI user id through the map (0 when unmapped / ambiguous / skipped). */
 final class UserRef
 {
-    public static function resolve(string $source, ?string $srcId, Context $ctx): int
+    public static function resolve(string $source, ?string $srcId, Context $ctx, bool $fallback = true): int
     {
         if ($srcId === null || $srcId === '') {
             return 0;
@@ -21,7 +21,7 @@ final class UserRef
                 return (int) $row['items_id'];
             }
         }
-        return (int) $ctx->flag('fallback_user', 0);
+        return $fallback ? (int) $ctx->flag('fallback_user', 0) : 0;
     }
 
     public static function group(string $source, ?string $srcId): int

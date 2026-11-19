@@ -12,6 +12,7 @@ use GlpiPlugin\Itsmmigrator\Adapter\Dto\ExternalTicket;
 use GlpiPlugin\Itsmmigrator\Adapter\Dto\ExternalUser;
 use GlpiPlugin\Itsmmigrator\Adapter\Dto\ExternalWorklog;
 use GlpiPlugin\Itsmmigrator\Adapter\Dto\Page;
+use GlpiPlugin\Itsmmigrator\Adapter\Dto\ExternalApproval;
 use GlpiPlugin\Itsmmigrator\Adapter\Dto\TicketChildren;
 use GlpiPlugin\Itsmmigrator\Adapter\SourceAdapterInterface;
 
@@ -391,7 +392,7 @@ final class FreshserviceAdapter implements SourceAdapterInterface
 
     // ------------------------------------------------------------- children
 
-    public function fetchTicketChildren(string $ticketSrcId): TicketChildren
+    public function fetchTicketChildren(string $ticketSrcId, bool $approvals = false): TicketChildren
     {
         $id   = rawurlencode($ticketSrcId);
         $main = $this->client->get("/tickets/$id", ['include' => 'stats'])['json']['ticket'] ?? [];
@@ -450,7 +451,15 @@ final class FreshserviceAdapter implements SourceAdapterInterface
         $res = $main['resolution_notes_html'] ?? $main['resolution_notes'] ?? $main['resolution'] ?? null;
         if (is_array($res)) {
             $res = $res['content'] ?? $res['body'] ?? null;
-        }        $stats = (array) ($main['stats'] ?? []);
+        }
+        $stats = (array) ($main['stats'] ?? []);
+
+        $found = [];
+        if ($approvals) {
+            foreach ($this->all("/tickets/$id/approvals", 'approvals') as $a) {
+                $found[] = self::approval($a, $ticketSrcId);
+            }
+        }
 
         return new TicketChildren(
             $notes,
@@ -459,7 +468,40 @@ final class FreshserviceAdapter implements SourceAdapterInterface
             $attachments,
             is_string($res) && trim($res) !== '' ? $res : null,
             self::date($stats['resolved_at'] ?? null),
-            self::date($stats['closed_at'] ?? null)
+            self::date($stats['closed_at'] ?? null),
+            $found
+        );
+    }
+
+    /**
+     * A ticket approval. Recorded shape: approval_status (Requested / Approved / Rejected, or a code), approver_id,
+     * user_id (who asked), latest_remark, level (1 to 4 on a multi-level chain), created_at, updated_at. Tolerant: an
+     * unknown status stays 'requested' (never decided), a missing level is 1.
+     *
+     * @param array<string,mixed> $a
+     */
+    public static function approval(array $a, string $ticketSrcId): ExternalApproval
+    {
+        $raw = $a['approval_status_name'] ?? $a['status_name'] ?? $a['approval_status'] ?? $a['status'] ?? '';
+        $word = strtolower(trim((string) $raw));
+        $status = match (true) {
+            in_array($word, ['approved', '2'], true) => 'approved',
+            in_array($word, ['rejected', '3'], true) => 'rejected',
+            default => 'requested',
+        };
+        $level = (int) ($a['level'] ?? $a['approval_level'] ?? 1);
+        $by = $a['approver_id'] ?? $a['approver']['id'] ?? null;
+        return new ExternalApproval(
+            self::SOURCE,
+            (string) $a['id'],
+            $ticketSrcId,
+            max(1, $level),
+            $status,
+            $by !== null ? (string) $by : null,
+            isset($a['user_id']) ? (string) $a['user_id'] : null,
+            self::text($a['latest_remark'] ?? $a['remark'] ?? ''),
+            self::date($a['created_at'] ?? null),
+            $status === 'requested' ? null : self::date($a['updated_at'] ?? null)
         );
     }
 

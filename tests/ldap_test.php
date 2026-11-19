@@ -14,6 +14,7 @@ class AuthLDAP
     public static int $imports = 0;
     public static int $searches = 0;
     public static int $connects = 0;
+    public static int $failNext = 0; // the next N searches fail with a core error (a tired connection), then recover
     public array $fields = [];
 
     public function getFromDB($id) { $this->fields = ['basedn' => 'OU=Fake,DC=example,DC=test', 'condition' => '', 'email1_field' => 'mail']; return true; }
@@ -27,7 +28,8 @@ class AuthLDAP
             // Exactly what core does on a failed search: a warning carrying the base DN and the filter.
             trigger_error('LDAP search with base DN `OU=Secret,DC=corp,DC=example` and filter `(mail=someone@example.test)` failed', E_USER_WARNING);
         }
-        if (self::$cfg['error']) {
+        if (self::$cfg['error'] || self::$failNext > 0) {
+            if (self::$failNext > 0) { self::$failNext--; }
             $error = true;
             return false;
         }
@@ -60,7 +62,7 @@ use GlpiPlugin\Itsmmigrator\Matching\GlpiLdapLookup as L;
 
 $reset = function (array $cfg = []) {
     AuthLDAP::$cfg = array_merge(['connect' => true, 'raise' => false, 'error' => false, 'found' => true], $cfg);
-    AuthLDAP::$imports = AuthLDAP::$searches = AuthLDAP::$connects = 0;
+    AuthLDAP::$imports = AuthLDAP::$searches = AuthLDAP::$connects = AuthLDAP::$failNext = 0;
     User::$known = [];
 };
 $log = [];
@@ -100,9 +102,20 @@ $r2 = $l->findAndImport(['b@example.test'], 'b');
 restore_error_handler();
 check('failing search: no PHP warning escapes to the caller (nothing for the log or the page)', $warnings === 0, "warnings=$warnings");
 check('failing search: answered null, no exception', $r1 === null && $r2 === null);
-check('failing search: each directory is searched once, then switched off for the run', $searchesAfterFirst === 2 && AuthLDAP::$searches === 2, 'searches=' . AuthLDAP::$searches);
+check('failing search: each directory gets one retry on a fresh connection, then is switched off for the run', $searchesAfterFirst === 4 && AuthLDAP::$searches === 4, 'searches=' . AuthLDAP::$searches);
 check('failing search: the log never carries a DN, a filter or an address', array_filter($log, fn ($m) => stripos($m, 'OU=') !== false || stripos($m, 'example') !== false || str_contains($m, '@') || stripos($m, 'mail=') !== false) === [], json_encode($log));
 check('failing search: the log says which directory was skipped, by number', count(array_filter($log, fn ($m) => str_contains($m, 'directory 1') || str_contains($m, 'directory 2'))) === 2, json_encode($log));
+
+// ---- a tired connection: one failure is answered with a fresh connection and the retry succeeds (directory stays in use)
+$reset(['found' => true]); AuthLDAP::$failNext = 1; $log = []; $l = $mk();
+$r = $l->findAndImport(['a@example.test'], '', true);
+check('transient search error: reconnect and retry find the person', $r === ['users_id' => 0, 'imported' => true] && AuthLDAP::$connects === 2 && AuthLDAP::$searches === 2, 'connects=' . AuthLDAP::$connects . ' searches=' . AuthLDAP::$searches);
+check('transient search error: the directory is not switched off', array_filter($log, fn ($m) => str_contains($m, 'skipped')) === []);
+
+// ---- long loops: a fresh connection every RECONNECT_EVERY searches, not one per person
+$reset(['found' => false]); $l = $mk();
+for ($i = 0; $i < 600; $i++) { $l->findAndImport(['u' . $i . '@example.test'], '', true); }
+check('600 searches on 2 directories: reconnect every ' . L::RECONNECT_EVERY . ' (3 connections per directory, not 600)', AuthLDAP::$connects === 6 && AuthLDAP::$searches === 1200, 'connects=' . AuthLDAP::$connects);
 
 // ---- unreachable directory
 $reset(['connect' => false]); $log = []; $l = $mk();

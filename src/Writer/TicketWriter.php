@@ -2,6 +2,7 @@
 
 namespace GlpiPlugin\Itsmmigrator\Writer;
 
+use GlpiPlugin\Itsmmigrator\Adapter\Dto\ExternalApproval;
 use GlpiPlugin\Itsmmigrator\Adapter\Dto\ExternalAttachment;
 use GlpiPlugin\Itsmmigrator\Adapter\Dto\ExternalNote;
 use GlpiPlugin\Itsmmigrator\Adapter\Dto\ExternalTask;
@@ -95,7 +96,7 @@ final class TicketWriter
             $rowId = Recorder::open($ctx, $t, $existing, 'Ticket', $ticketId, $action);
 
             // 5. Children, each mapped on its own.
-            $children = $adapter->fetchTicketChildren($t->srcId);
+            $children = $adapter->fetchTicketChildren($t->srcId, self::wantsApprovals($ctx));
             $errors   = $this->children($t, $children, $ticketId, $ctx);
 
             // 6. Status and dates last.
@@ -249,6 +250,9 @@ final class TicketWriter
         foreach ($c->worklogs as $w) {
             $run('worklog', $w->srcId, fn () => $this->worklog($w, $ticketId, $ctx));
         }
+        foreach ($c->approvals as $ap) {
+            $run('approval', $ap->srcId, fn () => $this->approval($ap, $ticketId, $ctx));
+        }
         if ($c->resolution !== null) {
             $run('solution', $t->srcId, fn () => $this->solution($t, $c, $ticketId, $ctx));
         }
@@ -335,6 +339,90 @@ final class TicketWriter
                 }
                 return $id;
             }, $k);
+    }
+
+    /** Approvals are opt-in (source option import_approvals, or the run flag approvals): one more request per ticket. */
+    public static function wantsApprovals(Context $ctx): bool
+    {
+        return !empty($ctx->flag('approvals')) || !empty($ctx->option('import_approvals'));
+    }
+
+    /** GLPI approval status of a source status. */
+    public static function validationStatus(string $status): int
+    {
+        return match ($status) {
+            'approved' => \CommonITILValidation::ACCEPTED,
+            'rejected' => \CommonITILValidation::REFUSED,
+            default    => \CommonITILValidation::WAITING,
+        };
+    }
+
+    /**
+     * One approval -> a TicketValidation in the approval step "Level N" (one step per level, so a multi-level chain keeps
+     * its order). The approver must be a GLPI user already in the map: an approval whose approver is unknown is logged and
+     * counted, never given to the fallback user (that would put a wrong name on a decision).
+     */
+    private function approval(ExternalApproval $ap, int $ticketId, Context $ctx): void
+    {
+        global $DB;
+        $approver = UserRef::resolve($ap->source, $ap->approverSrcId, $ctx, false);
+        if ($approver <= 0) {
+            $ctx->counters->detail('approvals', 'skipped_approver_unmapped');
+            $ctx->log(sprintf('  approval %s skipped: the approver is not a GLPI user (level %d)', $ap->srcId, $ap->level));
+            return;
+        }
+        $submitted = Mapping::localDate($ap->createdAt);
+        $this->child($ap->source, 'approval', $ap->srcId, 'TicketValidation', Mapping::contentHash($ap->status . '|' . $approver . '|' . $ap->level), $ctx,
+            function () use ($DB, $ticketId, $approver, $submitted): int {
+                foreach ($DB->request(['SELECT' => ['id'], 'FROM' => 'glpi_ticketvalidations', 'WHERE' => ['tickets_id' => $ticketId, 'itemtype_target' => 'User', 'items_id_target' => $approver, 'submission_date' => $submitted], 'LIMIT' => 1]) as $r) {
+                    return (int) $r['id'];
+                }
+                return 0;
+            },
+            function () use ($ap, $ticketId, $approver, $ctx, $submitted): int {
+                $id = (int) (new \TicketValidation())->add([
+                    'tickets_id'          => $ticketId,
+                    'itemtype_target'     => 'User',
+                    'items_id_target'     => $approver,
+                    '_validationsteps_id' => $this->levelStep($ap->level),
+                    'comment_submission'  => '(imported approval request)',
+                    '_auto_import'        => true,
+                    '_disablenotif'       => true,
+                ]);
+                if ($id <= 0) {
+                    throw new \RuntimeException('GLPI refused the approval');
+                }
+                return $id;
+            }, $ap);
+        // add() forces the session user, "now" and WAITING: the real requester, date and decision go in straight.
+        $id = $this->mappedId('approval', $ap);
+        if ($id > 0 && !$ctx->dryRun()) {
+            $set = ['status' => self::validationStatus($ap->status), 'users_id' => UserRef::resolve($ap->source, $ap->requesterSrcId, $ctx, false)];
+            if ($submitted !== null) {
+                $set['submission_date'] = $submitted;
+            }
+            if ($ap->status !== 'requested') {
+                $set['validation_date']   = Mapping::localDate($ap->decidedAt);
+                $set['comment_validation'] = $ap->remark;
+            }
+            $DB->update('glpi_ticketvalidations', $set, ['id' => $id]);
+            $ctx->counters->detail('approvals', $ap->status);
+        }
+    }
+
+    /** The core approval step "Level N" (created once, named after the level). */
+    private function levelStep(int $level): int
+    {
+        global $DB;
+        $name = 'Level ' . $level;
+        foreach ($DB->request(['SELECT' => ['id'], 'FROM' => 'glpi_validationsteps', 'WHERE' => ['name' => $name], 'LIMIT' => 1]) as $r) {
+            return (int) $r['id'];
+        }
+        $id = (int) (new \ValidationStep())->add(['name' => $name, 'minimal_required_validation_percent' => 100]);
+        if ($id <= 0) {
+            throw new \RuntimeException('GLPI refused the approval step ' . $name);
+        }
+        return $id;
     }
 
     private function worklog(ExternalWorklog $w, int $ticketId, Context $ctx): void
