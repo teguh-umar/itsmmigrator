@@ -70,4 +70,13 @@ check('never backwards', Engine::watermarkToWrite('2024-03-20 00:00:00', $pos, '
 $cd = new Counters(); $cd->detail('users', 'matched_by_email', 2); $cd->detail('users', 'skipped_no_match');
 check('counter details: kept apart from the main counters, never user data', $cd->details() === ['users' => ['matched_by_email' => 2, 'skipped_no_match' => 1]] && $cd->all() === []);
 check('the engine result carries the details, the CLI prints them', str_contains((string) file_get_contents(ITSM_ROOT . '/src/Engine.php'), "'details' => \$counters->details()") && str_contains((string) file_get_contents(ITSM_ROOT . '/src/Console/RunCommand.php'), 'detail: '));
+// ---- import_since (a floor for the phase) and phases
+$S = fn (array $o, ?string $wm = null) => ['options' => json_encode($o), 'watermark' => $wm];
+check('import_since is read as a UTC date', $utc(Engine::importSince($S(['import_since' => '2026-01-01']))) === '2026-01-01 00:00:00' && Engine::importSince($S([])) === null && Engine::importSince($S(['import_since' => 'rubbish'])) === null);
+check('first phase: no watermark -> read from import_since', $utc(Engine::effectiveSince($S(['import_since' => '2026-01-01']), [])) === '2026-01-01 00:00:00');
+check('after a phase the watermark wins (a delta), but never below import_since', $utc(Engine::effectiveSince($S(['import_since' => '2026-01-01'], '2026-11-18 10:00:00'), [])) === '2026-11-18 01:00:00' && $utc(Engine::effectiveSince($S(['import_since' => '2026-12-01'], '2026-11-18 10:00:00'), [])) === '2026-12-01 00:00:00');
+check('a LATER, wider phase: lower import_since + "read everything" reads from the new floor', $utc(Engine::effectiveSince($S(['import_since' => '2025-01-01'], '2026-11-18 10:00:00'), ['full' => true])) === '2025-01-01 00:00:00');
+check('--retry-failed reads from import_since too (not from 2010)', $utc(Engine::effectiveSince($S(['import_since' => '2025-01-01'], '2026-11-18 10:00:00'), ['retry_failed' => true])) === '2025-01-01 00:00:00');
+check('an explicit --since still beats everything', $utc(Engine::effectiveSince($S(['import_since' => '2026-01-01'], '2026-11-18 10:00:00'), ['since' => '2024-05-05T00:00:00Z', 'full' => true])) === '2024-05-05 00:00:00');
+check('nothing set: everything', Engine::effectiveSince($S([]), []) === null && Engine::effectiveSince($S([]), ['full' => true]) === null);
 done();

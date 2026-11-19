@@ -37,7 +37,10 @@ final class FreshserviceAdapter implements SourceAdapterInterface
     /** @var array{status: array<int,string>, priority: array<int,string>}|null status and priority wording of THIS account */
     private ?array $labels = null;
 
-    public function __construct(private readonly FreshserviceClient $client)
+    /**
+     * @param int $maxPage the last page Freshservice serves for one list query (300 x 100 = 30,000 tickets); a test lowers it
+     */
+    public function __construct(private readonly FreshserviceClient $client, private readonly int $maxPage = self::MAX_PAGE)
     {
     }
 
@@ -112,7 +115,7 @@ final class FreshserviceAdapter implements SourceAdapterInterface
             'users'      => $this->usersPage($cursor),
             'groups'     => $this->groupsPage($page),
             'categories' => $this->categoriesPage($page),
-            'tickets'    => $this->ticketsPage($page, $since),
+            'tickets'    => $this->ticketsPage($page, $since, $cursor),
             default      => throw new \InvalidArgumentException("Module $module is not supported by Freshservice"),
         };
     }
@@ -289,29 +292,80 @@ final class FreshserviceAdapter implements SourceAdapterInterface
 
     // -------------------------------------------------------------- tickets
 
-    private function ticketsPage(int $page, ?\DateTimeImmutable $since): Page
+    /**
+     * One page of the ticket list, read in WINDOWS. Freshservice serves at most `maxPage` pages of 100 tickets per
+     * query (30,000), oldest update first. When the last servable page is full the list is not over: the next window
+     * starts at the update time of the last ticket seen and the cursor says so ("w:<UTC time>:<page>"), so the
+     * caller just keeps asking for the next page. The window start is inclusive: a ticket updated in the very second
+     * the window starts is read twice, and the second read is a no-op for the writer (it is already mapped).
+     *
+     * If a whole window shares one update second (more than the cap), skipping ahead one second is the only way
+     * forward; that is said in the notes, because tickets of that second beyond the cap cannot be read.
+     */
+    private function ticketsPage(int $page, ?\DateTimeImmutable $since, ?string $cursor): Page
     {
-        if ($page > self::MAX_PAGE) {
-            throw new ClientException('Freshservice stops paging after ' . self::MAX_PAGE . ' pages: import in windows with --since', 0, 'limit');
+        [$from, $pg] = self::parseWindow($cursor, $since ?? new \DateTimeImmutable('2010-01-01T00:00:00Z'), $page);
+        if ($pg > $this->maxPage) {
+            throw new ClientException('Freshservice stops paging after ' . $this->maxPage . ' pages for one query', 0, 'limit');
         }
-        $from = ($since ?? new \DateTimeImmutable('2010-01-01T00:00:00Z'))->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d\TH:i:s\Z');
         // updated_since is mandatory: without it the list only returns the last 30 days.
-        $r    = $this->client->get('/tickets', [
-            'updated_since' => $from,
+        $r = $this->client->get('/tickets', [
+            'updated_since' => self::iso($from),
             'order_by'      => 'updated_at',
             'order_type'    => 'asc',
             'per_page'      => FreshserviceClient::PER_PAGE,
-            'page'          => $page,
+            'page'          => $pg,
         ]);
-        $rows  = $r['json']['tickets'] ?? [];
-        $items = [];
+        $rows   = $r['json']['tickets'] ?? [];
         $labels = $this->labels();
+        $items  = [];
         foreach ($rows as $t) {
             $items[] = self::ticket($t, $labels['status'], $labels['priority']);
         }
-        return new Page($items, self::more($r, count($rows)));
+        $more = self::more($r, count($rows));
+        if (!$more) {
+            return new Page($items, false);
+        }
+        if ($pg < $this->maxPage) {
+            return new Page($items, true, 'w:' . self::iso($from) . ':' . ($pg + 1));
+        }
+
+        // The cap is reached and the page is full: continue in a new window.
+        $notes = [];
+        $last  = $items === [] ? null : $items[count($items) - 1]->updatedAt;
+        if ($last === null) {
+            return new Page($items, false, null, ['The last page of the window has no update time: the list cannot be continued']);
+        }
+        $next = $last->setTimezone(new \DateTimeZone('UTC'));
+        if ($next <= $from) {
+            $next    = $from->modify('+1 second');
+            $notes[] = sprintf('More than %d tickets share the update time %s: skipping ahead one second, the tickets of that second beyond the cap cannot be read', $this->maxPage * FreshserviceClient::PER_PAGE, self::iso($from));
+        }
+        $notes[] = 'Window ended at the ' . ($this->maxPage * FreshserviceClient::PER_PAGE) . ' ticket cap: the next window starts at ' . self::iso($next);
+        return new Page($items, true, 'w:' . self::iso($next) . ':1', $notes);
     }
 
+    /**
+     * "w:<UTC time>:<page>" -> [window start, page]. No cursor = the caller's since and page. An unreadable cursor
+     * is refused, never guessed. Pure.
+     *
+     * @return array{0: \DateTimeImmutable, 1: int}
+     */
+    public static function parseWindow(?string $cursor, \DateTimeImmutable $since, int $page): array
+    {
+        if ($cursor === null || $cursor === '') {
+            return [$since->setTimezone(new \DateTimeZone('UTC')), $page];
+        }
+        if (!preg_match('/^w:(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z):(\d{1,4})$/', $cursor, $m)) {
+            throw new \InvalidArgumentException('Unreadable ticket cursor');
+        }
+        return [new \DateTimeImmutable($m[1], new \DateTimeZone('UTC')), (int) $m[2]];
+    }
+
+    private static function iso(\DateTimeImmutable $d): string
+    {
+        return $d->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d\TH:i:s\Z');
+    }
     /** @param array<string,mixed> $t */
     public static function ticket(array $t, array $statusLabels = self::STATUS, array $priorityLabels = self::PRIORITY): ExternalTicket
     {

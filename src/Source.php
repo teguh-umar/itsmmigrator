@@ -133,6 +133,10 @@ class Source extends CommonDBTM
                 implode(', ', $otherActive)
             );
         }
+        // Import tickets updated since: a date (or an ISO time), checked before it is stored in the options.
+        if (array_key_exists('import_since', $input) && trim((string) $input['import_since']) !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}(:\d{2})?Z?)?$/', trim((string) $input['import_since']))) {
+            $errors[] = __('Import tickets updated since: use a date like 2026-01-01.', 'itsmmigrator');
+        }
         if (array_key_exists('schedule', $input) &&!in_array((string) $input['schedule'], self::SCHEDULES, true)) {
             $errors[] = __('Unknown schedule.', 'itsmmigrator');
         }
@@ -171,20 +175,31 @@ class Source extends CommonDBTM
                 $input[$json] = null;
             }
         }
-        // "Import only these categories": one path per line in the form, kept in the options JSON.
-        if (array_key_exists('ticket_categories_text', $input)) {
+        // Two settings live in the options JSON and have their own form fields: the category list (one path per line)
+        // and the "import tickets updated since" date. Everything else in options is kept as it is.
+        if (array_key_exists('ticket_categories_text', $input) || array_key_exists('import_since', $input)) {
             $options = json_decode((string) ($input['options'] ?? $stored['options'] ?? ''), true);
             $options = is_array($options) ? $options : [];
-            $lines = array_values(array_filter(array_map('trim', preg_split('/\R/', (string) $input['ticket_categories_text']) ?: []), static fn (string $l): bool => $l !== ''));
-            if ($lines === []) {
-                unset($options['ticket_categories']);
-            } else {
-                $options['ticket_categories'] = $lines;
+            if (array_key_exists('ticket_categories_text', $input)) {
+                $lines = array_values(array_filter(array_map('trim', preg_split('/\R/', (string) $input['ticket_categories_text']) ?: []), static fn (string $l): bool => $l !== ''));
+                if ($lines === []) {
+                    unset($options['ticket_categories']);
+                } else {
+                    $options['ticket_categories'] = $lines;
+                }
+                unset($input['ticket_categories_text']);
+            }
+            if (array_key_exists('import_since', $input)) {
+                $d = trim((string) $input['import_since']);
+                if ($d === '') {
+                    unset($options['import_since']);
+                } else {
+                    $options['import_since'] = $d;
+                }
+                unset($input['import_since']);
             }
             $input['options'] = $options === [] ? null : json_encode($options, JSON_UNESCAPED_UNICODE);
-            unset($input['ticket_categories_text']);
-        }
-        if (array_key_exists('base_url', $input)) {
+        }        if (array_key_exists('base_url', $input)) {
             $input['base_url'] = rtrim(trim((string) $input['base_url']), '/');
         }
         return $input;
@@ -293,6 +308,11 @@ class Source extends CommonDBTM
         \Entity::dropdown(['name' => 'entities_id', 'value' => (int) $f['entities_id'], 'entity' => -1, 'readonly' => !$canedit, 'rand' => 'itsmsrc']);
         echo '</div>';
 
+        $optsAll = json_decode((string) ($f['options'] ?? ''), true);
+        $sinceVal = is_array($optsAll) ? (string) ($optsAll['import_since'] ?? '') : '';
+        echo '<div class="mb-2" style="max-width:20rem"><label class="form-label" for="itsmmigrator-src-since">' . __s('Import tickets updated since', 'itsmmigrator') . '</label>';
+        echo '<input type="date" class="form-control" id="itsmmigrator-src-since" name="import_since" value="' . htmlescape($sinceVal) . '"' . $dis . '>';
+        echo '<div class="form-text">' . __s('Tickets last updated before this date are left out. To add an older period later, lower the date and run with "Read everything": tickets already imported are skipped.', 'itsmmigrator') . '</div></div>';
         $opts = json_decode((string) ($f['options'] ?? ''), true);
         $catsText = is_array($opts) && is_array($opts['ticket_categories'] ?? null) ? implode("\n", array_map('strval', $opts['ticket_categories'])) : '';
         echo '<div class="mb-2"><label class="form-label" for="itsmmigrator-src-cats">' . __s('Import only these ticket categories', 'itsmmigrator') . '</label>';

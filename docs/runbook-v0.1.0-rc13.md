@@ -1,4 +1,4 @@
-# Runbook: itsmmigrator (ITSM Migrator) 0.1.0-rc12
+# Runbook: itsmmigrator (ITSM Migrator) 0.1.0-rc13
 
 Run these steps in order. Every step says what a good result looks like. Stop at the first step that does not match and send the output back; do not skip ahead.
 
@@ -13,11 +13,11 @@ Facts used throughout:
 
 ## 0. Put the build in place
 
-Unpack `itsmmigratorv0.1.0-rc12.zip` so the folder is `<glpi>/plugins/itsmmigrator/` (the archive root is already `itsmmigrator/`), owned by the web-server user.
+Unpack `itsmmigratorv0.1.0-rc13.zip` so the folder is `<glpi>/plugins/itsmmigrator/` (the archive root is already `itsmmigrator/`), owned by the web-server user.
 
 ```bash
 cd <glpi>/plugins
-sudo unzip -o ~/itsmmigratorv0.1.0-rc12.zip
+sudo unzip -o ~/itsmmigratorv0.1.0-rc13.zip
 sudo chown -R <webuser>:<webuser> <glpi>/plugins/itsmmigrator
 ls <glpi>/plugins/itsmmigrator/setup.php
 ```
@@ -38,7 +38,7 @@ sudo -u <webuser> php bin/console plugin:list | grep -i itsmmigrator
 sudo -u <webuser> php bin/console cache:clear
 ```
 
-Good: install and activate report success; `plugin:list` shows `0.1.0-rc12` and `Enabled`. Clear the cache before opening any page of the plugin. Then log out and in again: GLPI reads profile rights and builds the menu at login, so ICT Tools > ITSM Migrator does not appear in an older session.
+Good: install and activate report success; `plugin:list` shows `0.1.0-rc13` and `Enabled`. Clear the cache before opening any page of the plugin. Then log out and in again: GLPI reads profile rights and builds the menu at login, so ICT Tools > ITSM Migrator does not appear in an older session.
 
 Check the three tables, the rights and the cron task:
 
@@ -76,6 +76,7 @@ Look at the log lines: `unmapped status/priority/type "..."` mean the source use
 ## 5. Pilot, then full, in this order
 
 In the source form of a saved source, **Show the categories of this source** lists the source's category tree (paths only, read from the source with one GET, nothing stored or logged) so the paths can be clicked instead of typed. A click adds the path to the box above; nothing is saved until you press Save.
+**Import in phases.** The source form has **Import tickets updated since**. Phase 1: set it to the newest period (for example `2026-01-01`), run a dry run with `--limit=50`, then the real run. A later, wider phase: lower the date (for example `2025-01-01`) and run with **Read everything** (`--full`, or the box on the Runs page): the tickets already imported are skipped by the map, only the older ones are created. A plain run after a phase is a delta from the watermark and never goes below the date. One query returns at most 30,000 tickets, so a big period is read in windows (the log says "Window ended at the 30000 ticket cap: the next window starts at ..."); this is normal. A long read needs free memory on the machine running it: with little free RAM use `--limit` for a trial, and run the full import where memory is free.
 **Scope the first import.** In the source form, "Import only these ticket categories" takes one category path per line (for example `Hardware > Laptop`; a path includes everything below it). The same can be given per run with `--category`. Use the wording the dry run shows for the categories; tickets of other categories are left out and nothing remembers them, so widening the list later picks them up. A run with a category filter never moves the watermark. Without a filter every category is imported.
 
 ```bash
