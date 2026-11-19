@@ -47,7 +47,7 @@ function plugin_itsmmigrator_schema_ddl(string $charset, string $collation): arr
             `sources_id` INT UNSIGNED NOT NULL DEFAULT 0,
             `source` VARCHAR(20) NOT NULL DEFAULT '',
             `src_type` VARCHAR(50) NOT NULL DEFAULT '',
-            `src_id` VARCHAR(64) NOT NULL DEFAULT '',
+            `src_id` VARCHAR(255) NOT NULL DEFAULT '',
             `display_id` VARCHAR(64) NULL DEFAULT NULL,
             `itemtype` VARCHAR(100) NOT NULL DEFAULT '',
             `items_id` INT UNSIGNED NOT NULL DEFAULT 0,
@@ -98,6 +98,13 @@ function plugin_itsmmigrator_install()
         if (!$DB->tableExists($table)) {
             $DB->doQuery($sql);
         }
+    }
+
+    // rc17: a category path is the source id of a category and can be longer than 64 characters (the first real run failed on
+    // one). Widening is idempotent and keeps every row.
+    $col = $DB->request(['SELECT' => ['CHARACTER_MAXIMUM_LENGTH AS len'], 'FROM' => 'information_schema.COLUMNS', 'WHERE' => ['TABLE_SCHEMA' => $DB->dbdefault, 'TABLE_NAME' => 'glpi_plugin_itsmmigrator_maps', 'COLUMN_NAME' => 'src_id']])->current();
+    if ($col !== null && (int) $col['len'] < 255) {
+        $DB->doQuery("ALTER TABLE `glpi_plugin_itsmmigrator_maps` MODIFY `src_id` VARCHAR(255) NOT NULL DEFAULT ''");
     }
 
     // Rights created in THIS run. An existing right keeps what an admin set in the matrix.
