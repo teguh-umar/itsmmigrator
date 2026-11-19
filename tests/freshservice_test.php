@@ -150,4 +150,19 @@ check('categories: "&amp;" in a choice becomes "&"', $escCats === [['MS Applicat
 $tk = A::ticket(['id' => 1, 'subject' => 'A &amp; B', 'category' => 'Tom &amp; Jerry', 'sub_category' => 'x', 'status' => 2, 'priority' => 2, 'type' => 'Incident']);
 check('ticket: subject and category path are decoded', $tk->subject === 'A & B' && $tk->categoryPath === ['Tom & Jerry', 'x']);
 check('users: names are decoded', A::agent(['id' => 1, 'first_name' => 'Ann &amp; Co', 'last_name' => 'X'])->name === 'Ann & Co X');
+// ---- a dropped connection is retried (GET only, so safe); a persistent one gives up with a clear error
+$calls = []; $slept = []; $n = 0;
+$flaky = function (string $url, array $h, ?string $sink) use (&$n, &$calls) { $calls[] = $url; if (++$n <= 2) { throw new ClientException('Network error talking to Freshservice: Connection was reset', 0, 'network'); } return ['status' => 200, 'headers' => [], 'body' => '{"ok":1}']; };
+$c = new FreshserviceClient('https://acme.example.test', KEY, $flaky, $noSleep, 0.0);
+$r = $c->get('/x');
+check('network: two resets then success -> retried with backoff 2 s, 4 s', $n === 3 && ($r['json']['ok'] ?? 0) === 1 && $slept === [2.0, 4.0], json_encode($slept));
+$calls = []; $slept = []; $n = -100;
+$c = new FreshserviceClient('https://acme.example.test', KEY, $flaky, $noSleep, 0.0);
+try { $c->get('/x'); check('network: a persistent failure gives up', false); }
+catch (ClientException $e) { check('network: a persistent failure gives up after the retries, reason network, key not in the message', count($calls) === FreshserviceClient::MAX_NETWORK_RETRIES + 1 && $e->reason === 'network' && !str_contains($e->getMessage(), KEY)); }
+$calls = []; $n = 0;
+$cfgErr = function () use (&$n) { $n++; throw new ClientException('Attachment link is not https', 0, 'config'); };
+$c = new FreshserviceClient('https://acme.example.test', KEY, $cfgErr, $noSleep, 0.0);
+try { $c->get('/x'); } catch (ClientException $e) { }
+check('network: only reason "network" is retried (a config error is not)', $n === 1);
 done();
