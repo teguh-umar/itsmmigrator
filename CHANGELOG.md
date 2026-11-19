@@ -1,4 +1,9 @@
 # Changelog
+## 0.1.0-rc16
+
+- **A ticket never loses who asked.** When a ticket's requester is not a GLPI user (no match by e-mail, login or directory, and users are not created), the ticket is created with no requester (or the fallback user, when one is given) and its description now starts with a line `Requester (source): Name <e-mail>`, read once per distinct user from the source (`SourceAdapterInterface::describeUser`, one GET `/requesters/{id}` or `/agents/{id}`, remembered for the run; "unknown, not readable" when the source cannot answer, never an error). Found at the first real run of phase 1 (about 7,100 of 8,574 users unmatched): a later run skips tickets already mapped, so the identity could not have been added afterwards. The real run was stopped before any ticket was written.
+- **Tests.** `tests/requester_line_test.php` (6 checks); `tools/staging_integration_m15.php` now 13 checks (an unmatched requester: the first line, no requester actor).
+
 ## 0.1.0-rc15
 
 - **Ticket approvals (opt-in).** Source option `import_approvals` (a tick box on the source form), run flag `--approvals` (a tick box on the Runs page). Off by default: it costs one more request per ticket (`/tickets/{id}/approvals`). Each Freshservice approval becomes a GLPI `TicketValidation`: the approver (a user already in the map: no fallback user, an unknown approver is skipped, logged and counted as `approvals.skipped_approver_unmapped`), the requester, the submission date, the decision (Requested = waiting, Approved = granted, Rejected = refused), the decision date and the remark. **One core approval step per level, named "Level N"**, so a multi-level chain keeps its order; the step is created once. An unknown status is read as "waiting", never as a decision. Each approval is mapped (`approval`), so a second run adds nothing. A dry run asks for nothing.
