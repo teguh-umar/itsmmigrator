@@ -539,6 +539,28 @@ final class FreshserviceAdapter implements SourceAdapterInterface
         );
     }
 
+    public function fetchServiceCatalog(): array
+    {
+        $categories = (array) ($this->client->get('/service_catalog/categories')['json']['service_categories'] ?? []);
+        $list = [];
+        for ($page = 1; $page <= 100; $page++) {
+            $r = (array) ($this->client->get('/service_catalog/items', ['per_page' => 100, 'page' => $page])['json']['service_items'] ?? []);
+            $list = array_merge($list, $r);
+            if (count($r) < 100) {
+                break;
+            }
+        }
+        $items = [];
+        foreach ($list as $it) {
+            if (!empty($it['deleted']) || !isset($it['display_id'])) {
+                continue;
+            }
+            $d = $this->client->get('/service_catalog/items/' . (int) $it['display_id'])['json'];
+            $items[] = (array) ($d['service_item'] ?? $d);
+        }
+        return ['categories' => $categories, 'items' => $items];
+    }
+
     public function downloadAttachment(ExternalAttachment $attachment, string $destPath): void
     {
         $this->client->download($attachment->url, $destPath);

@@ -7,7 +7,7 @@
  * @license GPL-3.0-or-later
  */
 
-define('PLUGIN_ITSMMIGRATOR_VERSION', '0.1.0-rc24');
+define('PLUGIN_ITSMMIGRATOR_VERSION', '0.1.0-rc25');
 define('PLUGIN_ITSMMIGRATOR_MIN_GLPI', '11.0.0');
 define('PLUGIN_ITSMMIGRATOR_MAX_GLPI', '11.0.99');
 

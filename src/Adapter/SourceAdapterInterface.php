@@ -38,6 +38,14 @@ interface SourceAdapterInterface
      */
     public function describeUser(string $userSrcId): ?array;
 
+    /**
+     * The service catalog: its categories and its items, each item with its custom fields (one GET for the categories,
+     * one per page of items, one per item). Read only.
+     *
+     * @return array{categories:list<array<string,mixed>>,items:list<array<string,mixed>>}
+     */
+    public function fetchServiceCatalog(): array;
+
     /** Download one attachment into $destPath (a file under GLPI_TMP_DIR). */
     public function downloadAttachment(Dto\ExternalAttachment $attachment, string $destPath): void;
 }
