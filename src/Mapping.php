@@ -95,7 +95,9 @@ final class Mapping
     /** `[FS#1001] Subject` / `[SDP#...] Subject` (spec §4). */
     public static function ticketTitle(string $prefix, string $displayId, string $subject): string
     {
-        return sprintf('[%s#%s] %s', $prefix, $displayId, trim($subject) === '' ? '(no subject)' : trim($subject));
+        $title = sprintf('[%s#%s] %s', $prefix, $displayId, trim($subject) === '' ? '(no subject)' : trim($subject));
+        // glpi_tickets.name is 255 characters; the [prefix#id] part is the natural key and stays whole.
+        return mb_strlen($title) > 255 ? mb_substr($title, 0, 254) . '…' : $title;
     }
 
     /** @param array<string,mixed> $m @return array<string,mixed> keys lower-cased */

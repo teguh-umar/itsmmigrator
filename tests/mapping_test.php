@@ -46,6 +46,8 @@ check('hash ignores tags, case and whitespace', M::contentHash('<p>Hello   <b>Wo
 check('hash decodes entities', M::contentHash('a &amp; b') === M::contentHash('a & b'));
 check('different text, different hash', M::contentHash('one') !== M::contentHash('two'));
 check('title: [FS#id] subject', M::ticketTitle('FS', '1001', ' Laptop ') === '[FS#1001] Laptop');
+$long = M::ticketTitle('FS', '1001', str_repeat('é', 400));
+check('title: never longer than the 255 characters of the GLPI column, the [prefix#id] key kept whole', mb_strlen($long) === 255 && str_starts_with($long, '[FS#1001] ') && M::ticketTitle('FS', '1001', str_repeat('a', 240)) === '[FS#1001] ' . str_repeat('a', 240));
 check('title: empty subject gets a placeholder', M::ticketTitle('SDP', '7', '  ') === '[SDP#7] (no subject)');
 
 // ---- --since

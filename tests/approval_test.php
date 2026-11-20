@@ -41,6 +41,22 @@ $on = $ad->fetchTicketChildren('1001', true);
 check('children without approvals: no approvals request, empty list', $callsOff === [] && $off->approvals === []);
 check('children with approvals: one request, one approval', count(array_filter($calls, fn ($u) => str_contains($u, '/approvals'))) === 1 && count($on->approvals) === 1 && $on->approvals[0]->status === 'approved');
 
+// a ticket that never had an approval: Freshservice answers 404 on /approvals; that is "none", never a failed ticket
+$t404 = function (string $url, array $h, ?string $sink): array {
+    if (str_contains($url, '/approvals')) { return ['status' => 404, 'headers' => [], 'body' => '{"code":"resource_not_found"}']; }
+    if (preg_match('#/tickets/1002(\?|$)#', $url)) { return ['status' => 200, 'headers' => [], 'body' => '{"ticket":{"id":1002}}']; }
+    return ['status' => 200, 'headers' => [], 'body' => '{"conversations":[],"tasks":[],"time_entries":[]}'];
+};
+$ad404 = new A(new FreshserviceClient('https://acme.example.test', 'KEY', $t404, fn (float $s) => null, 0.0));
+$none = $ad404->fetchTicketChildren('1002', true);
+check('approvals 404 (a ticket with no approval) gives an empty list, not an error', $none->approvals === []);
+$t500 = function (string $url, array $h, ?string $sink): array {
+    if (str_contains($url, '/approvals')) { return ['status' => 403, 'headers' => [], 'body' => '{}']; }
+    if (preg_match('#/tickets/1003(\?|$)#', $url)) { return ['status' => 200, 'headers' => [], 'body' => '{"ticket":{"id":1003}}']; }
+    return ['status' => 200, 'headers' => [], 'body' => '{"conversations":[],"tasks":[],"time_entries":[]}'];
+};
+try { (new A(new FreshserviceClient('https://acme.example.test', 'KEY', $t500, fn (float $s) => null, 0.0)))->fetchTicketChildren('1003', true); check('any other approvals error (403) is still an error', false); } catch (\Throwable $e) { check('any other approvals error (403) is still an error', true); }
+
 // the option and the flag
 $o = json_decode((string) Source::prepare(['import_approvals' => '1'], static fn ($s) => $s, ['options' => json_encode(['import_since' => '2026-01-01'])])['options'], true);
 check('source option import_approvals is kept next to the others', $o === ['import_since' => '2026-01-01', 'import_approvals' => true]);
