@@ -85,13 +85,13 @@ class ImportAssetsCommand extends AbstractCommand
                 continue;
             }
             $in = ['name' => $row['name'], 'entities_id' => $entity, 'is_recursive' => 0, 'serial' => $row['serial'], 'otherserial' => $row['inventory'], 'comment' => $row['comment']];
-            $in['manufacturers_id'] = $row['manufacturer'] !== '' ? (int) \Dropdown::importExternal('Manufacturer', $row['manufacturer'], $entity) : 0;
-            $in['locations_id']     = $row['location'] !== '' ? (int) \Dropdown::importExternal('Location', $row['location'], $entity) : 0;
-            $in['states_id']        = $row['status'] !== '' ? (int) \Dropdown::importExternal('State', $row['status'], $entity) : 0;
+            $in['manufacturers_id'] = $row['manufacturer'] !== '' ? $this->dropdown('Manufacturer', $row['manufacturer'], $entity) : 0;
+            $in['locations_id']     = $row['location'] !== '' ? $this->dropdown('Location', $row['location'], $entity) : 0;
+            $in['states_id']        = $row['status'] !== '' ? $this->dropdown('State', $row['status'], $entity) : 0;
             if ($core) {
                 foreach (['type' => 'Type', 'model' => 'Model'] as $key => $suffix) {
                     if ($row[$key] !== '') {
-                        $in[getForeignKeyFieldForItemType($class . $suffix)] = (int) \Dropdown::importExternal($class . $suffix, $row[$key], $entity);
+                        $in[getForeignKeyFieldForItemType($class . $suffix)] = $this->dropdown($class . $suffix, $row[$key], $entity);
                     }
                 }
             }
@@ -111,6 +111,33 @@ class ImportAssetsCommand extends AbstractCommand
         }
         $output->writeln($dry ? 'Dry run: nothing written ("created" = would be created).' : 'Done.');
         return $counts['failed'] > 0 ? self::FAILURE : self::SUCCESS;
+    }
+
+    /**
+     * The id of a dropdown value by name: one that exists (visible in the entity first, then in any entity: GLPI's own
+     * importExternal answers false for a value that exists but is not visible there, e.g. the default status "In use"),
+     * else a new one. 0 when it cannot be had.
+     */
+    private function dropdown(string $class, string $value, int $entity): int
+    {
+        global $DB;
+        $table = getTableForItemType($class);
+        $by    = $DB->fieldExists($table, 'completename') ? 'completename' : 'name';
+        $crit  = [$by => $value];
+        if ($DB->fieldExists($table, 'entities_id')) {
+            $seen = $crit + getEntitiesRestrictCriteria($table, 'entities_id', $entity, true);
+            foreach ($DB->request(['SELECT' => ['id'], 'FROM' => $table, 'WHERE' => $seen, 'LIMIT' => 1]) as $r) {
+                return (int) $r['id'];
+            }
+        }
+        $id = \Dropdown::importExternal($class, $value, $entity);
+        if (is_numeric($id) && (int) $id > 0) {
+            return (int) $id;
+        }
+        foreach ($DB->request(['SELECT' => ['id'], 'FROM' => $table, 'WHERE' => $crit, 'LIMIT' => 1]) as $r) {
+            return (int) $r['id'];
+        }
+        return 0;
     }
 
     /** @return class-string<\CommonDBTM>|null */

@@ -1,4 +1,9 @@
 # Changelog
+## 0.1.0-rc24
+
+- **Fix in `import-assets`: a status (or any dropdown value) that exists but is not visible in the target entity is reused, not lost.** GLPI's own `Dropdown::importExternal` answers false for such a value (the default status "In use" lives in the root entity), so rc23 left the asset's status empty. The command now looks the value up by name (visible in the entity first, then in any entity) and only then creates it. Found by tools/staging_integration_m17.php before any real use. rc23 was never pushed.
+- **Tests.** asset_csv_test 14; m17 8 checks on staging 2. Offline suite OK.
+
 ## 0.1.0-rc23
 
 - **New command `plugins:itsmmigrator:import-assets`** creates assets from a CSV exported from another GLPI's asset list (Assets > list > Export > CSV). `--file=<csv>` (keep it outside the repository), `--entity=<id>` (required, not the root), `--itemtype=` NetworkEquipment (default), Computer, Printer, Phone, Peripheral, Monitor, or the system name of an Asset definition (Storage, Security...), `--username=<login>`, `--dry-run`. The delimiter (; , or tab), a BOM and English or Indonesian column names are recognised (Name, Type, Model, Manufacturer, Serial number, Inventory number, Location, Status, Comments; other columns are ignored). An asset whose name already exists in the target entity (not in the trash) is left alone, so a second run adds nothing. Type, model, manufacturer, location (a path "A > B" becomes a tree) and status are found by name and created when missing. For an Asset definition only name, serial, inventory number, comment, manufacturer, location and status are carried (its own type and model are not). The output is counts and the file line numbers of failures: never a name, serial or address. The names are kept exactly, which is what the monitor link (`link-assets`) matches on.

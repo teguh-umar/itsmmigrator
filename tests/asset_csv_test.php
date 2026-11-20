@@ -22,6 +22,7 @@ check('no Name column is an error, an empty file is an error', C::parse("Foo;Bar
 $cmd = (string) file_get_contents(ITSM_ROOT . '/src/Console/ImportAssetsCommand.php');
 check('the command never prints a name, serial or address (counts and line numbers only)', !preg_match('/writeln\([^;]*\$row\[/', $cmd) && str_contains($cmd, 'Failed on file lines'));
 check('an existing asset of the same name in the entity is left alone, and the definition is told apart', str_contains($cmd, "'exists'") && str_contains($cmd, "\$where['assets_assetdefinitions_id'] = \$def;"));
+check('a dropdown value that exists but is not visible in the entity (e.g. the default status) is reused, not lost', str_contains($cmd, 'private function dropdown(') && str_contains($cmd, 'importExternal answers false') && !str_contains($cmd, '(int) \Dropdown::importExternal('));
 check('a dry run writes nothing', str_contains($cmd, 'if ($dry) {'));
 check('a target entity is required and the root is refused', str_contains($cmd, '$entity <= 0'));
 
