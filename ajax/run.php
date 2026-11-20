@@ -42,7 +42,7 @@ $action = (string) ($_POST['action'] ?? '');
 switch ($action) {
     case 'start':
         $modules = array_values(array_intersect(Engine::MODULES, array_map('strval', (array) ($_POST['modules'] ?? []))));
-        $flags   = array_intersect_key($_POST, array_flip(['dry_run', 'limit', 'retry_failed', 'recreate_missing', 'create_missing_users', 'activate_created_users', 'ldap_lookup', 'assign_profiles', 'fallback_user', 'since', 'until', 'date_basis', 'approvals']));
+        $flags   = array_intersect_key($_POST, array_flip(['dry_run', 'limit', 'retry_failed', 'recreate_missing', 'create_missing_users', 'activate_created_users', 'ldap_lookup', 'assign_profiles', 'fallback_user', 'since', 'until', 'date_basis', 'approvals', 'retry_attachments']));
         $reply(200, WebRun::start((int) ($_POST['sources_id'] ?? 0), $modules, $flags));
 
         // no break: $reply() never returns

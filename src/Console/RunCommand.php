@@ -38,6 +38,7 @@ class RunCommand extends AbstractCommand
         $this->addOption('until', null, InputOption::VALUE_REQUIRED, 'End of the import range: a date (the whole day) or an ISO time. With --since it gives a from-to range');
         $this->addOption('date-basis', null, InputOption::VALUE_REQUIRED, 'Which date the range is about: updated (default, last update) or created (the day the ticket was opened)');
         $this->addOption('approvals', null, InputOption::VALUE_NONE, 'Also import the approvals of each ticket (one more request per ticket; the approver must already be a GLPI user)');
+        $this->addOption('retry-skipped-attachments', null, InputOption::VALUE_NONE, 'Fetch again the attachments GLPI refused before (size or document type), now that its limits changed; only tickets that have one are read again');
         $this->addOption('full', null, InputOption::VALUE_NONE, 'Read every ticket: ignore the source watermark');
         $this->addOption('dry-run', null, InputOption::VALUE_NONE, 'Read and match only, write nothing');
         $this->addOption('limit', null, InputOption::VALUE_REQUIRED, 'Stop each module after N items');
@@ -119,6 +120,7 @@ class RunCommand extends AbstractCommand
             'dry_run'                => (bool) $input->getOption('dry-run'),
             'full'                   => (bool) $input->getOption('full'),
             'approvals'              => $input->getOption('approvals') ? true : null,
+            'retry_attachments'      => $input->getOption('retry-skipped-attachments') ? true : null,
             'retry_failed'           => (bool) $input->getOption('retry-failed'),
             'recreate_missing'       => (bool) $input->getOption('recreate-missing'),
             'force_unlock'           => (bool) $input->getOption('force-unlock'),

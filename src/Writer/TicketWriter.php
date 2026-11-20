@@ -49,6 +49,9 @@ final class TicketWriter
         $existing = MapRepository::find($t->source, 'ticket', $t->srcId);
         $decision = MapRepository::decide($existing, $ctx->decideOptions());
         if ($decision === 'skip') {
+            if ($ctx->flag('retry_attachments') && $existing !== null && (string) $existing['status'] === MapRepository::OK && (int) $existing['items_id'] > 0) {
+                $this->retrySkippedAttachments($t, (int) $existing['items_id'], $ctx);
+            }
             $ctx->counters->add($mod, 'skipped');
             return 'skipped';
         }
@@ -564,13 +567,13 @@ final class TicketWriter
             }, $item);
     }
 
-    private function attachment(ExternalAttachment $a, ExternalTicket $t, int $ticketId, Context $ctx, ?SourceAdapterInterface $adapter): void
+    private function attachment(ExternalAttachment $a, ExternalTicket $t, int $ticketId, Context $ctx, ?SourceAdapterInterface $adapter, bool $again = false): void
     {
         if ($adapter === null) {
             throw new \LogicException('no adapter to download with');
         }
         $row = MapRepository::find($a->source, 'document', $a->srcId);
-        if ($row !== null && in_array($row['status'], [MapRepository::OK, MapRepository::SKIPPED], true)) {
+        if ($row !== null && ($row['status'] === MapRepository::OK || ($row['status'] === MapRepository::SKIPPED && !$again))) {
             return;
         }
 
@@ -595,7 +598,7 @@ final class TicketWriter
             if ($docId === 0) {
                 $why = AttachmentRule::refusal($a->name, (int) filesize($path), (int) ($GLOBALS['CFG_GLPI']['document_max_size'] ?? 0), $this->uploadableExtensions());
                 if ($why !== null) {
-                    $this->skipAttachment($a, $t, $ticketId, $why, $row, $ctx);
+                    $again ? $this->stillRefused($a, $why, $row, $ctx) : $this->skipAttachment($a, $t, $ticketId, $why, $row, $ctx);
                     return;
                 }
                 $docId = (int) (new \Document())->add([
@@ -606,7 +609,7 @@ final class TicketWriter
                     '_only_if_upload_succeed' => true,
                 ]);
                 if ($docId <= 0) {
-                    $this->skipAttachment($a, $t, $ticketId, 'GLPI refused the document', $row, $ctx);
+                    $again ? $this->stillRefused($a, 'GLPI refused the document', $row, $ctx) : $this->skipAttachment($a, $t, $ticketId, 'GLPI refused the document', $row, $ctx);
                     return;
                 }
             }
@@ -615,9 +618,72 @@ final class TicketWriter
                 (new \Document_Item())->add(['documents_id' => $docId, 'itemtype' => 'Ticket', 'items_id' => $ticketId, 'entities_id' => $ctx->targetEntity(), 'is_recursive' => 0]);
             }
             Recorder::ok($ctx, $rowId);
+            if ($again) {
+                $this->noteImportedLater($a, $ticketId, $ctx);
+            }
         } finally {
             if (is_file($path)) {
                 @unlink($path); // Document::add moves the file; this only cleans up a failure
+            }
+        }
+    }
+
+    /**
+     * "Fetch again the refused attachments" (a ticket already imported): read its children once more (the download links
+     * are short-lived) and give each attachment whose map row is skipped another go under the limits GLPI has now.
+     */
+    private function retrySkippedAttachments(ExternalTicket $t, int $ticketId, Context $ctx): void
+    {
+        global $DB;
+        $skipped = [];
+        foreach ($DB->request(['SELECT' => ['src_id'], 'FROM' => MapRepository::table(), 'WHERE' => ['sources_id' => $ctx->sourcesId(), 'source' => $t->source, 'src_type' => 'document', 'status' => MapRepository::SKIPPED, 'itemtype' => 'Ticket', 'items_id' => $ticketId]]) as $r) {
+            $skipped[(string) $r['src_id']] = true;
+        }
+        if ($skipped === []) {
+            return;
+        }
+        if ($ctx->dryRun()) {
+            $ctx->counters->detail('attachments', 'would_retry');
+            $ctx->log(sprintf('[dry] ticket %s: %d skipped attachment(s) would be fetched again', $t->srcId, count($skipped)));
+            return;
+        }
+        try {
+            $children = $this->adapterRef?->fetchTicketChildren($t->srcId, false);
+            foreach ($children?->attachments ?? [] as $a) {
+                if (isset($skipped[(string) $a->srcId])) {
+                    $this->attachment($a, $t, $ticketId, $ctx, $this->adapterRef, true);
+                }
+            }
+        } catch (\Throwable $e) {
+            $ctx->log(sprintf('ticket %s: fetching the skipped attachments again failed: %s', $t->srcId, $e->getMessage()));
+        }
+    }
+
+    /**
+     * Still refused: the stored note stays as it is, none is added; only the reason in the map row is brought up to date.
+     *
+     * @param array<string,mixed>|null $row
+     */
+    private function stillRefused(ExternalAttachment $a, string $why, ?array $row, Context $ctx): void
+    {
+        if ($row !== null) {
+            MapRepository::markSkipped((int) $row['id'], $why);
+        }
+        $ctx->counters->detail('attachments', 'still_refused');
+        $ctx->log(sprintf('  attachment %s still not imported (%s)', $a->srcId, $why));
+    }
+
+    /** Imported at last: the earlier private note "Attachment not imported: <file>" becomes "imported later", no second note. */
+    private function noteImportedLater(ExternalAttachment $a, int $ticketId, Context $ctx): void
+    {
+        global $DB;
+        $ctx->counters->detail('attachments', 'imported_later');
+        $new = '<p><b>Attachment imported later:</b> ' . htmlspecialchars($a->name, ENT_QUOTES) . ' (' . AttachmentRule::size($a->size) . '). It is now in the ticket\'s documents.</p>';
+        foreach ($DB->request(['SELECT' => ['id', 'content'], 'FROM' => 'glpi_itilfollowups', 'WHERE' => ['itemtype' => 'Ticket', 'items_id' => $ticketId, ['content' => ['LIKE', '%Attachment not imported:%']]]]) as $f) {
+            $text = html_entity_decode((string) $f['content'], ENT_QUOTES | ENT_HTML5);
+            if (str_contains($text, $a->name)) {
+                $DB->update('glpi_itilfollowups', ['content' => $new], ['id' => (int) $f['id']]);
+                return;
             }
         }
     }

@@ -1,4 +1,9 @@
 # Changelog
+## 0.1.0-rc21
+
+- **Fetch again the attachments GLPI refused: `--retry-skipped-attachments`** (CLI flag, and a checkbox on the Run page). Until now a refused attachment (over GLPI's document size, or a file type GLPI does not accept) was mapped as skipped and never looked at again, even after the limit was raised or the type was added. With the flag, a ticket already imported that has a skipped attachment is read again (the download links are short-lived), and each skipped attachment gets another go under the limits GLPI has now. Imported: the Document is created and linked to the ticket, the map row becomes ok, and the earlier private note "Attachment not imported: <file>" is replaced by "Attachment imported later: <file>" (never a second note). Still refused: the row stays skipped and its reason is updated, no new note. Tickets with no skipped attachment are not read again. Counted as `attachments` `imported_later` / `still_refused` (`would_retry` in a dry run).
+- **Tests.** attachment_retry_test 9 (wiring and rules); tools/staging_integration_m16.php runs it for real on staging 2 (2 MB limit then 50 MB, same synthetic ticket). Offline suite OK.
+
 ## 0.1.0-rc20
 
 - **Approver not in the directory: a private note instead of a log line.** An approval whose approver is not a GLPI user (not found by the LDAP search or in the map) now leaves a private followup on the ticket: level, decision, approver name and e-mail as the source knows them, decision date and remark. It is mapped as skipped, so a later run does not add it twice. The approval is still never given to the fallback user. Tickets imported before rc20 get their notes with one `--full` run.

@@ -85,6 +85,7 @@ final class RunView
         self::check('dry_run', __('Dry run (write nothing)', 'itsmmigrator'), true);
         self::check('full', __('Read everything (ignore the watermark)', 'itsmmigrator'), false);
         self::check('approvals', __('Import approvals (one more request per ticket)', 'itsmmigrator'), false);
+        self::check('retry_attachments', __('Fetch again the attachments GLPI refused before (after raising its size limit or adding a document type)', 'itsmmigrator'), false);
         self::check('retry_failed', __('Retry failed', 'itsmmigrator'), false);
         self::check('create_missing_users', __('Create missing users', 'itsmmigrator'), false);
         self::check('ldap_lookup', __('Directory lookup for users', 'itsmmigrator'), true);
