@@ -93,6 +93,21 @@ final class Context
     private int $lastBeat = 0;
 
     /** Gap in wall-clock seconds between two items above which a note is logged: the computer was probably asleep. */
+    public const AUTH_STREAK = 3;
+    private int $authStreak = 0;
+
+    /** An item failed because the source refused the key (401/403). Returns true once AUTH_STREAK items in a row did. */
+    public function authFailed(): bool
+    {
+        return ++$this->authStreak >= self::AUTH_STREAK;
+    }
+
+    /** Any item that went through resets the streak. */
+    public function authOk(): void
+    {
+        $this->authStreak = 0;
+    }
+
     public const SLEEP_GAP = 300;
 
     /** @param callable():void $beat */

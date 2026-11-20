@@ -1,4 +1,12 @@
 # Changelog
+## 0.1.0-rc20
+
+- **Approver not in the directory: a private note instead of a log line.** An approval whose approver is not a GLPI user (not found by the LDAP search or in the map) now leaves a private followup on the ticket: level, decision, approver name and e-mail as the source knows them, decision date and remark. It is mapped as skipped, so a later run does not add it twice. The approval is still never given to the fallback user. Tickets imported before rc20 get their notes with one `--full` run.
+- **Stop on a refused key.** After 3 tickets in a row failing with HTTP 401 or 403 the run stops and says the key is the problem ("blocked, revoked or has lost its role; nothing is wrong with the tickets") instead of failing every ticket after it. A ticket that goes through resets the count. Repair with `--retry-failed`.
+- **Monitor (NMS) tickets are linked to their asset.** The source keeps no asset record; the monitor writes the device name and address in the ticket ("Device: name ip Category: ..."). The importer reads the name (body first, subject as fallback) and, when exactly one asset of that name exists in GLPI (any asset type, in the ticket's entity or one it can see), adds the ticket-asset link. No asset, or more than one: a private note says what the monitor named and nothing is linked. An asset is never created. A failure there never fails the ticket. Counted as `assets` linked / already / missing / ambiguous.
+- **New command `plugins:itsmmigrator:link-assets --source=<id> --username=<login> [--dry-run]`** does the same for tickets already imported (local only, no request to the source, counts only in its output).
+- **Tests.** auth_streak_test 9, asset_linker_test 11. Offline suite OK.
+
 ## 0.1.0-rc19
 
 - **Fix: an attachment GLPI would refuse no longer fails the ticket.** GLPI limits a document to its configured size (2 MB here) and accepts only the file types listed as uploadable. On the first real run a few tickets failed because one attachment was a larger zip or an unknown type (`.json`, `.cs`, `.cshtml`). The writer now checks both rules first; a file that would be refused is skipped, counted (`attachments.skipped_refused_by_glpi`), mapped as skipped (not retried every run) and named in a private followup (file name, size, reason) so it can still be fetched from the source. A generic "GLPI refused the document" is handled the same way. Tickets that failed on this are repaired with `--retry-failed`.

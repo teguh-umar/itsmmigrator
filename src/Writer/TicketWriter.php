@@ -9,6 +9,7 @@ use GlpiPlugin\Itsmmigrator\Adapter\Dto\ExternalTask;
 use GlpiPlugin\Itsmmigrator\Adapter\Dto\ExternalTicket;
 use GlpiPlugin\Itsmmigrator\Adapter\Dto\ExternalWorklog;
 use GlpiPlugin\Itsmmigrator\Adapter\Dto\TicketChildren;
+use GlpiPlugin\Itsmmigrator\Adapter\ClientException;
 use GlpiPlugin\Itsmmigrator\Adapter\SourceAdapterInterface;
 use GlpiPlugin\Itsmmigrator\AttachmentRule;
 use GlpiPlugin\Itsmmigrator\CategoryFilter;
@@ -100,6 +101,9 @@ final class TicketWriter
             $children = $adapter->fetchTicketChildren($t->srcId, self::wantsApprovals($ctx));
             $errors   = $this->children($t, $children, $ticketId, $ctx);
 
+            // 5b. The asset a monitor ticket is about (an asset that exists in GLPI; otherwise a private note).
+            $this->linkAsset($ticketId, $ctx);
+
             // 6. Status and dates last.
             $this->finalize($t, $children, $ticketId, $ctx);
 
@@ -110,13 +114,32 @@ final class TicketWriter
                 return 'failed';
             }
             Recorder::ok($ctx, $rowId);
+            $ctx->authOk();
             $ctx->counters->add($mod, $action === MapRepository::CREATED ? 'created' : 'matched');
             return $action === MapRepository::CREATED ? 'created' : 'matched';
         } catch (\Throwable $e) {
             Recorder::fail($ctx, $t, $existing, $rowId, $e->getMessage());
             $ctx->counters->add($mod, 'failed');
             $ctx->log(sprintf('ticket %s FAILED: %s', $t->srcId, $e->getMessage()));
+            if ($e instanceof ClientException && in_array($e->status, [401, 403], true) && $ctx->authFailed()) {
+                // The key itself is refused, not these tickets: stop here instead of failing every ticket that follows.
+                throw new \RuntimeException(sprintf('The source refused the API key on %d tickets in a row (HTTP %d): the key is blocked, revoked or has lost its role. Nothing is wrong with the tickets. Check the key, then run again with retry-failed.', Context::AUTH_STREAK, $e->status));
+            }
             return 'failed';
+        }
+    }
+
+    /** A failure here never fails the ticket. */
+    private function linkAsset(int $ticketId, Context $ctx): void
+    {
+        try {
+            $r = \GlpiPlugin\Itsmmigrator\AssetLinker::apply($ticketId, $ctx->dryRun());
+        } catch (\Throwable $e) {
+            $ctx->log(sprintf('  asset link for ticket %d failed: %s', $ticketId, $e->getMessage()));
+            return;
+        }
+        if ($r !== 'none') {
+            $ctx->counters->detail('assets', $r);
         }
     }
 
@@ -384,8 +407,7 @@ final class TicketWriter
         global $DB;
         $approver = UserRef::resolve($ap->source, $ap->approverSrcId, $ctx, false);
         if ($approver <= 0) {
-            $ctx->counters->detail('approvals', 'skipped_approver_unmapped');
-            $ctx->log(sprintf('  approval %s skipped: the approver is not a GLPI user (level %d)', $ap->srcId, $ap->level));
+            $this->noteUnmappedApproval($ap, $ticketId, $ctx);
             return;
         }
         $submitted = Mapping::localDate($ap->createdAt);
@@ -425,6 +447,57 @@ final class TicketWriter
             $DB->update('glpi_ticketvalidations', $set, ['id' => $id]);
             $ctx->counters->detail('approvals', $ap->status);
         }
+    }
+
+    /**
+     * The text of the private note that stands in for an approval whose approver is not a GLPI user: who, which level,
+     * what was decided, when, and the remark, so the decision is never lost. Pure.
+     *
+     * @param array{name:string,email:string}|null $approver
+     */
+    public static function approvalNote(?array $approver, int $level, string $status, ?string $decidedAt, ?string $remark): string
+    {
+        $who   = $approver === null ? '' : trim($approver['name'] . ($approver['email'] !== '' ? ' <' . $approver['email'] . '>' : ''));
+        $label = ['approved' => 'Approved', 'rejected' => 'Rejected'][$status] ?? 'Waiting for the answer';
+        $out   = '<p><b>Approval (source), level ' . $level . ': ' . $label . '</b> by '
+            . htmlspecialchars($who !== '' ? $who : 'an approver who is not readable in the source', ENT_QUOTES)
+            . ' (not a GLPI user, so it could not be an approval here).';
+        if ($decidedAt !== null && $decidedAt !== '' && $status !== 'requested') {
+            $out .= ' Decided: ' . htmlspecialchars($decidedAt, ENT_QUOTES) . '.';
+        }
+        if ($remark !== null && trim($remark) !== '' && $status !== 'requested') {
+            $out .= ' Remark: ' . htmlspecialchars(trim($remark), ENT_QUOTES);
+        }
+        return $out . '</p>';
+    }
+
+    /**
+     * An approval whose approver is not a GLPI user (not in the directory): a private followup says who decided what,
+     * and the approval is mapped as skipped so a later run does not add the note twice. Never given to a fallback user.
+     */
+    private function noteUnmappedApproval(ExternalApproval $ap, int $ticketId, Context $ctx): void
+    {
+        $ctx->counters->detail('approvals', 'skipped_approver_unmapped');
+        $row = MapRepository::find($ap->source, 'approval', $ap->srcId);
+        if ($row !== null && in_array($row['status'], [MapRepository::OK, MapRepository::SKIPPED], true)) {
+            return;
+        }
+        if ($ctx->dryRun()) {
+            $ctx->log(sprintf('  approval %s: the approver is not a GLPI user (level %d); a private followup would say so', $ap->srcId, $ap->level));
+            return;
+        }
+        $note = self::approvalNote($this->adapterRef?->describeUser($ap->approverSrcId), $ap->level, $ap->status, Mapping::localDate($ap->decidedAt), $ap->remark);
+        $id   = (int) (new \ITILFollowup())->add([
+            'itemtype' => 'Ticket', 'items_id' => $ticketId, 'content' => $note, 'is_private' => 1, 'users_id' => 0,
+            'date' => Mapping::localDate($ap->createdAt) ?? date('Y-m-d H:i:s'), '_disablenotif' => true,
+        ]);
+        if ($id > 0) {
+            $rowId = Recorder::open($ctx, $ap, $row, 'Ticket', $ticketId, MapRepository::CREATED);
+            if ($rowId > 0) {
+                MapRepository::markSkipped($rowId, 'approver is not a GLPI user (noted in a private followup)');
+            }
+        }
+        $ctx->log(sprintf('  approval %s: the approver is not a GLPI user (level %d); a private followup %s', $ap->srcId, $ap->level, $id > 0 ? 'says so' : 'could not be added'));
     }
 
     /** The core approval step "Level N" (created once, named after the level). */
