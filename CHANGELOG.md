@@ -1,4 +1,10 @@
 # Changelog
+## 0.1.0-rc19
+
+- **Fix: an attachment GLPI would refuse no longer fails the ticket.** GLPI limits a document to its configured size (2 MB here) and accepts only the file types listed as uploadable. On the first real run a few tickets failed because one attachment was a larger zip or an unknown type (`.json`, `.cs`, `.cshtml`). The writer now checks both rules first; a file that would be refused is skipped, counted (`attachments.skipped_refused_by_glpi`), mapped as skipped (not retried every run) and named in a private followup (file name, size, reason) so it can still be fetched from the source. A generic "GLPI refused the document" is handled the same way. Tickets that failed on this are repaired with `--retry-failed`.
+- **Fix: a healthy run no longer looks dead.** The run lock's heartbeat was refreshed once per page of 100 tickets; on a slow page it passed the 15-minute stale limit. It is now refreshed after every item (at most every 10 s). A gap of more than 5 minutes between two items is logged as "the computer was probably asleep" and the run goes on.
+- **Tests.** attachment_rule_test 9, heartbeat_test 7. Offline suite OK.
+
 ## 0.1.0-rc18
 
 - **Fix: a ticket with no approval is not a failed ticket.** Freshservice answers HTTP 404 (not an empty list) on `/tickets/{id}/approvals` for a ticket that never had an approval. With "Import approvals" on, rc15 to rc17 turned that into a failure of the whole ticket: on the first real run of phase 1 about a fifth of the tickets failed on it (checked read-only: ticket, conversations, tasks and time entries answer 200, only `/approvals` answers 404). A 404 there now means "no approvals"; any other error (403, network, 5xx) is still an error. Tickets that failed that way are repaired by running again with `--retry-failed` (their other children are already in place).

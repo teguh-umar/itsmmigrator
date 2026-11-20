@@ -10,6 +10,7 @@ use GlpiPlugin\Itsmmigrator\Adapter\Dto\ExternalTicket;
 use GlpiPlugin\Itsmmigrator\Adapter\Dto\ExternalWorklog;
 use GlpiPlugin\Itsmmigrator\Adapter\Dto\TicketChildren;
 use GlpiPlugin\Itsmmigrator\Adapter\SourceAdapterInterface;
+use GlpiPlugin\Itsmmigrator\AttachmentRule;
 use GlpiPlugin\Itsmmigrator\CategoryFilter;
 use GlpiPlugin\Itsmmigrator\Context;
 use GlpiPlugin\Itsmmigrator\MapRepository;
@@ -519,6 +520,11 @@ final class TicketWriter
             }
             $action = $docId > 0 ? MapRepository::MATCHED : MapRepository::CREATED;
             if ($docId === 0) {
+                $why = AttachmentRule::refusal($a->name, (int) filesize($path), (int) ($GLOBALS['CFG_GLPI']['document_max_size'] ?? 0), $this->uploadableExtensions());
+                if ($why !== null) {
+                    $this->skipAttachment($a, $t, $ticketId, $why, $row, $ctx);
+                    return;
+                }
                 $docId = (int) (new \Document())->add([
                     'name'               => $a->name,
                     'entities_id'        => $ctx->targetEntity(),
@@ -527,7 +533,8 @@ final class TicketWriter
                     '_only_if_upload_succeed' => true,
                 ]);
                 if ($docId <= 0) {
-                    throw new \RuntimeException('GLPI refused the document');
+                    $this->skipAttachment($a, $t, $ticketId, 'GLPI refused the document', $row, $ctx);
+                    return;
                 }
             }
             $rowId = Recorder::open($ctx, $a, $row, 'Document', $docId, $action, ['content_hash' => $sha]);
@@ -540,6 +547,43 @@ final class TicketWriter
                 @unlink($path); // Document::add moves the file; this only cleans up a failure
             }
         }
+    }
+
+    /** @var list<string>|null */
+    private ?array $uploadable = null;
+
+    /** @return list<string> */
+    private function uploadableExtensions(): array
+    {
+        global $DB;
+        if ($this->uploadable === null) {
+            $this->uploadable = [];
+            foreach ($DB->request(['SELECT' => ['ext'], 'FROM' => 'glpi_documenttypes', 'WHERE' => ['is_uploadable' => 1]]) as $r) {
+                $this->uploadable[] = strtolower((string) $r['ext']);
+            }
+        }
+        return $this->uploadable;
+    }
+
+    /**
+     * A file GLPI will not take: the ticket is not failed for it. A private followup says which file, how big and why, so
+     * it can still be fetched from the source; the attachment is mapped as skipped (counted, not retried every run).
+     *
+     * @param array<string,mixed>|null $row
+     */
+    private function skipAttachment(ExternalAttachment $a, ExternalTicket $t, int $ticketId, string $why, ?array $row, Context $ctx): void
+    {
+        $note = '<p><b>Attachment not imported:</b> ' . htmlspecialchars($a->name, ENT_QUOTES) . ' (' . AttachmentRule::size($a->size) . '), ' . htmlspecialchars($why, ENT_QUOTES) . '. It is still in the source ticket.</p>';
+        $id = (int) (new \ITILFollowup())->add([
+            'itemtype' => 'Ticket', 'items_id' => $ticketId, 'content' => $note, 'is_private' => 1, 'users_id' => 0,
+            'date' => date('Y-m-d H:i:s'), '_disablenotif' => true,
+        ]);
+        $rowId = Recorder::open($ctx, $a, $row, 'Ticket', $ticketId, MapRepository::CREATED);
+        if ($rowId > 0) {
+            MapRepository::markSkipped($rowId, $why);
+        }
+        $ctx->counters->detail('attachments', 'skipped_refused_by_glpi');
+        $ctx->log(sprintf('  attachment %s not imported (%s); a private followup %s', $a->srcId, $why, $id > 0 ? 'says so' : 'could not be added'));
     }
 
     // ------------------------------------------------------------ finalize
