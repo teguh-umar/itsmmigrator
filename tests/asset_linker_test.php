@@ -22,6 +22,7 @@ $src = (string) file_get_contents(ITSM_ROOT . '/src/AssetLinker.php');
 $tw  = (string) file_get_contents(ITSM_ROOT . '/src/Writer/TicketWriter.php');
 check('never creates an asset: only reads asset tables and adds the ticket link', !str_contains($src, '->add(["name"') && substr_count($src, '->add(') === 2 && str_contains($src, '\Item_Ticket'));
 check('the writer links before finalize and a failure there never fails the ticket', strpos($tw, '$this->linkAsset($ticketId, $ctx)') < strpos($tw, '$this->finalize($t, $children, $ticketId, $ctx)') && str_contains($tw, 'asset link for ticket'));
+check('custom assets (Wireless, Storage, Security...) share one table: each definition is searched only for its own rows', str_contains($src, "\$where['assets_assetdefinitions_id'] = \$type::getDefinition()->getID();") && str_contains($src, '\Glpi\Asset\Asset::class'));
 check('a second run adds nothing: link kept, note added once', str_contains($src, "'glpi_items_tickets'") && str_contains($src, "'%' . self::MARK . '%'"));
 
 done();

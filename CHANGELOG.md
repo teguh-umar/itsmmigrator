@@ -1,4 +1,9 @@
 # Changelog
+## 0.1.0-rc22
+
+- **Fix: the asset link also works for custom assets (Asset definitions such as Wireless, Storage, Security).** In GLPI 11 every custom asset type lives in ONE table (`glpi_assets_assets`) and is told apart by its definition. rc20 searched that table once per definition without telling them apart, so one Wireless access point would have been found three times and reported as "more than one asset has that name", and not linked. Each definition is now searched only for its own rows. Core types (computers, network equipment, ...) are unchanged. Staging 2 has no asset definition yet, so nothing was wrong there; the fix matters once the Wireless/Storage/Security definitions and their assets are in.
+- **Tests.** asset_linker_test 12. Offline suite OK.
+
 ## 0.1.0-rc21
 
 - **Fetch again the attachments GLPI refused: `--retry-skipped-attachments`** (CLI flag, and a checkbox on the Run page). Until now a refused attachment (over GLPI's document size, or a file type GLPI does not accept) was mapped as skipped and never looked at again, even after the limit was raised or the type was added. With the flag, a ticket already imported that has a skipped attachment is read again (the download links are short-lived), and each skipped attachment gets another go under the limits GLPI has now. Imported: the Document is created and linked to the ticket, the map row becomes ok, and the earlier private note "Attachment not imported: <file>" is replaced by "Attachment imported later: <file>" (never a second note). Still refused: the row stays skipped and its reason is updated, no new note. Tickets with no skipped attachment are not read again. Counted as `attachments` `imported_later` / `still_refused` (`would_retry` in a dry run).

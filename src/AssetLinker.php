@@ -71,6 +71,11 @@ final class AssetLinker
                 continue;
             }
             $where = ['name' => $device['name']] + getEntitiesRestrictCriteria($table, 'entities_id', (int) $t['entities_id'], true);
+            if (is_a($type, \Glpi\Asset\Asset::class, true)) {
+                // Custom assets (Asset definitions such as Wireless, Storage, Security) all share ONE table: without this
+                // the same row would be found once per definition, and one asset would look like several.
+                $where['assets_assetdefinitions_id'] = $type::getDefinition()->getID();
+            }
             if ($DB->fieldExists($table, 'is_deleted')) {
                 $where['is_deleted'] = 0;
             }
