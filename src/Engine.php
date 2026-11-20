@@ -151,6 +151,7 @@ final class Engine
             }
             $ctx->counters->add($module, 'fetched');
             $this->dispatch($module, $item, $ctx);
+            $ctx->tick();
             if ($module === 'tickets' && $item->updatedAt !== null) {
                 $iso = $item->updatedAt->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d\TH:i:s\Z');
                 if (!isset($pos['max_updated']) || $iso > $pos['max_updated']) {
@@ -213,6 +214,7 @@ final class Engine
 
         try {
             $log(sprintf('Run %d on source "%s" (%s), target entity %d%s', $runId, (string) $source['name'], $ctx->adapterKey(), $ctx->targetEntity(), $dry ? ', DRY RUN' : ''));
+            $ctx->onTick(static fn () => Lock::heartbeat($runId));
             $pos = self::newPosition($plan['modules']);
             do {
                 $done = $this->step($pos, $ctx);

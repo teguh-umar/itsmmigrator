@@ -1,0 +1,32 @@
+<?php
+
+namespace GlpiPlugin\Itsmmigrator;
+
+/**
+ * Would GLPI take this file as a document? GLPI refuses a file larger than its "document max size" (2 MB by default)
+ * and a file whose extension is not an uploadable document type. Found at the first real run of phase 1: zip files of
+ * 2 to 12 MB and .json / .cs / .cshtml files were refused, and each refusal failed the whole ticket. Pure.
+ */
+final class AttachmentRule
+{
+    /**
+     * @param list<string> $uploadableExts lower-case extensions of the uploadable document types
+     * @return string|null the reason, or null when GLPI would take it
+     */
+    public static function refusal(string $name, int $bytes, int $maxMb, array $uploadableExts): ?string
+    {
+        if ($maxMb > 0 && $bytes > $maxMb * 1048576) {
+            return sprintf('larger than the GLPI limit of %d MB (%s)', $maxMb, self::size($bytes));
+        }
+        $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+        if ($ext === '' || !in_array($ext, $uploadableExts, true)) {
+            return $ext === '' ? 'no file extension, so no GLPI document type' : sprintf('the file type .%s is not an allowed GLPI document type', $ext);
+        }
+        return null;
+    }
+
+    public static function size(int $bytes): string
+    {
+        return $bytes >= 1048576 ? sprintf('%.1f MB', $bytes / 1048576) : sprintf('%d KB', max(1, (int) round($bytes / 1024)));
+    }
+}

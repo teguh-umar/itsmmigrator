@@ -87,6 +87,39 @@ final class Context
         return DateRange::fromSettings($this->options, $this->flags);
     }
 
+    /** @var (callable():void)|null refreshes the run's heartbeat */
+    private $beat = null;
+    private int $lastTick = 0;
+    private int $lastBeat = 0;
+
+    /** Gap in wall-clock seconds between two items above which a note is logged: the computer was probably asleep. */
+    public const SLEEP_GAP = 300;
+
+    /** @param callable():void $beat */
+    public function onTick(callable $beat): void
+    {
+        $this->beat = $beat;
+    }
+
+    /**
+     * Called after every item. Refreshes the heartbeat at most every 10 s (a ticket takes seconds and a page of 100 can
+     * take 15 minutes: one beat per page made a healthy run look dead), and says so when the clock jumped, which is what
+     * a sleeping computer looks like. Time is a parameter so the rule can be tested.
+     */
+    public function tick(?int $now = null): void
+    {
+        $now ??= time();
+        if ($this->lastTick > 0 && $now - $this->lastTick > self::SLEEP_GAP) {
+            $this->log(sprintf('Note: %d minutes passed between two items (the computer was probably asleep); the run goes on', intdiv($now - $this->lastTick, 60)));
+            $this->lastBeat = 0;
+        }
+        $this->lastTick = $now;
+        if ($this->beat !== null && $now - $this->lastBeat >= 10) {
+            $this->lastBeat = $now;
+            ($this->beat)();
+        }
+    }
+
     public function log(string $message): void
     {
         ($this->logger)($message);
