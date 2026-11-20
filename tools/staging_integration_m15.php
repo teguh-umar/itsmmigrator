@@ -103,7 +103,12 @@ $stepName = function (int $id) use ($DB) {
     $r = $DB->request(['SELECT' => ['vs.name AS n'], 'FROM' => 'glpi_itils_validationsteps AS ivs', 'INNER JOIN' => ['glpi_validationsteps AS vs' => ['ON' => ['ivs' => 'validationsteps_id', 'vs' => 'id']]], 'WHERE' => ['ivs.id' => $id]])->current();
     return $r['n'] ?? null;
 };
-$approvalMaps = fn () => $count('glpi_plugin_itsmmigrator_maps', ['sources_id' => $sid, 'src_type' => 'approval']);
+$approvalMaps = fn () => $count('glpi_plugin_itsmmigrator_maps', ['sources_id' => $sid, 'src_type' => 'approval', 'status' => 'ok']);
+$skippedMaps  = fn () => $count('glpi_plugin_itsmmigrator_maps', ['sources_id' => $sid, 'src_type' => 'approval', 'status' => 'skipped']);
+$notes = function () use ($DB, $entity, $count) {
+    $tid = $DB->request(['SELECT' => ['id'], 'FROM' => 'glpi_tickets', 'WHERE' => ['entities_id' => $entity]])->current()['id'] ?? 0;
+    return $count('glpi_itilfollowups', ['itemtype' => 'Ticket', 'items_id' => $tid, 'is_private' => 1, ['content' => ['LIKE', '%Approval (source), level 2%']]]);
+};
 $asks = function () use (&$requests) { return count(array_filter($requests, fn ($u) => str_contains($u, '/approvals'))); };
 
 // ---- 1. without the option: no approval request, no validation
@@ -115,7 +120,8 @@ $wipe(); $requests = []; $log = [];
 $res = (new Engine($mkAdapter()))->run($fresh(['import_approvals' => true]), 'cli', ['tickets'], [], $logger);
 $v = $vals();
 chk('option: run succeeds and asks for the approvals once', $res['status'] === 'success' && $asks() === 1, json_encode($res['status']) . ' asks=' . $asks());
-chk('3 approvals imported, the one with an unknown approver skipped and counted', count($v) === 3 && $approvalMaps() === 3 && ($res['details']['approvals']['skipped_approver_unmapped'] ?? 0) === 1, 'rows=' . count($v) . ' ' . json_encode($res['counters']));
+chk('3 approvals imported, the one with an unknown approver mapped as skipped and counted', count($v) === 3 && $approvalMaps() === 3 && $skippedMaps() === 1 && ($res['details']['approvals']['skipped_approver_unmapped'] ?? 0) === 1, 'rows=' . count($v) . ' skipped=' . $skippedMaps() . ' ' . json_encode($res['counters']));
+chk('the unknown approver leaves ONE private note on the ticket', $notes() === 1, 'notes=' . $notes());
 chk('statuses: approved 3, refused 4, waiting 2', array_map(fn ($r) => (int) $r['status'], $v) === [3, 4, 2], json_encode(array_column($v, 'status')));
 chk('approvers are the right GLPI users', array_map(fn ($r) => (int) $r['items_id_target'], $v) === [$u1, $u2, $u1] && array_unique(array_column($v, 'itemtype_target')) === ['User'], json_encode(array_column($v, 'items_id_target')));
 $names = array_map(fn ($r) => $stepName((int) $r['itils_validationsteps_id']), $v);
@@ -132,7 +138,7 @@ chk('unmatched requester: no requester actor, the description follows the line',
 
 // ---- 3. a second run adds nothing
 (new Engine($mkAdapter()))->run($fresh(['import_approvals' => true]), 'cli', ['tickets'], ['full' => true], $logger);
-chk('second run (read everything): still 3 validations, 3 approval maps', count($vals()) === 3 && $approvalMaps() === 3, count($vals()) . '/' . $approvalMaps());
+chk('second run (read everything): still 3 validations, 3 approval maps, 1 skipped, still ONE note', count($vals()) === 3 && $approvalMaps() === 3 && $skippedMaps() === 1 && $notes() === 1, count($vals()) . '/' . $approvalMaps() . '/' . $skippedMaps() . '/notes ' . $notes());
 
 // ---- 4. the run flag turns it on without the option
 $wipe(); $requests = [];
