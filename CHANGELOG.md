@@ -1,4 +1,10 @@
 # Changelog
+## 0.1.0-rc18
+
+- **Fix: a ticket with no approval is not a failed ticket.** Freshservice answers HTTP 404 (not an empty list) on `/tickets/{id}/approvals` for a ticket that never had an approval. With "Import approvals" on, rc15 to rc17 turned that into a failure of the whole ticket: on the first real run of phase 1 about a fifth of the tickets failed on it (checked read-only: ticket, conversations, tasks and time entries answer 200, only `/approvals` answers 404). A 404 there now means "no approvals"; any other error (403, network, 5xx) is still an error. Tickets that failed that way are repaired by running again with `--retry-failed` (their other children are already in place).
+- **Ticket title capped at 255 characters** (the width of `glpi_tickets.name`), the `[prefix#id]` natural key kept whole, so one very long subject cannot fail a ticket.
+- **Tests.** approval_test 17 (404 is none, 403 is still an error), mapping_test 31 (title cap). Offline suite OK.
+
 ## 0.1.0-rc17
 
 - **Fix: a long category path no longer fails the run.** The map table's `src_id` was `VARCHAR(64)`, but a category's source id is its whole path (`Network > Network Security > Endpoint Protection (Anti Virus)`...) and some real paths are longer: the first real run of phase 1 failed in the categories module with "Data too long for column 'src_id'" (the dry run writes no map rows, so it could not show it). `src_id` is now `VARCHAR(255)`; a new install creates it so, and install/upgrade widens an existing column in place (idempotent, every row kept). Users (1,304 from the directory) and groups (38) written by that run stay, and a run again skips what is mapped.

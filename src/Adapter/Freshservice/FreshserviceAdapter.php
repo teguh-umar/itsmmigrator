@@ -482,8 +482,16 @@ final class FreshserviceAdapter implements SourceAdapterInterface
 
         $found = [];
         if ($approvals) {
-            foreach ($this->all("/tickets/$id/approvals", 'approvals') as $a) {
-                $found[] = self::approval($a, $ticketSrcId);
+            // Freshservice answers 404 (not an empty list) for a ticket that never had an approval: that is "none", not a failure
+            // (found on the first real run: a fifth of the tickets failed on it).
+            try {
+                foreach ($this->all("/tickets/$id/approvals", 'approvals') as $a) {
+                    $found[] = self::approval($a, $ticketSrcId);
+                }
+            } catch (ClientException $e) {
+                if ($e->status !== 404) {
+                    throw $e;
+                }
             }
         }
 
