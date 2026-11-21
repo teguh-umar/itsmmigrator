@@ -52,6 +52,9 @@ final class TicketWriter
             if ($ctx->flag('retry_attachments') && $existing !== null && (string) $existing['status'] === MapRepository::OK && (int) $existing['items_id'] > 0) {
                 $this->retrySkippedAttachments($t, (int) $existing['items_id'], $ctx);
             }
+            if ($existing !== null && (string) $existing['status'] === MapRepository::OK && (int) $existing['items_id'] > 0) {
+                $this->advanceStatus($t, (int) $existing['items_id'], $ctx);
+            }
             $ctx->counters->add($mod, 'skipped');
             return 'skipped';
         }
@@ -133,6 +136,54 @@ final class TicketWriter
     }
 
     /** A failure here never fails the ticket. */
+    /**
+     * Import rule (rc33): a ticket already in GLPI follows its source status FORWARD (e.g. Pending -> Approval, Pending -> Solved),
+     * only while it is open or pending, and only when nobody edited it in GLPI after the source's last update
+     * (GLPI date_mod newer than the source's updated date means a GLPI user touched it). It never goes backwards,
+     * never reopens a solved or closed ticket, and leaves one private followup so the move can be seen.
+     */
+    private function advanceStatus(ExternalTicket $t, int $ticketId, Context $ctx): void
+    {
+        global $DB;
+        $row = $DB->request(['SELECT' => ['status', 'date_mod'], 'FROM' => 'glpi_tickets', 'WHERE' => ['id' => $ticketId, 'is_deleted' => 0]])->current();
+        if ($row === null) {
+            return;
+        }
+        $from   = (int) $row['status'];
+        $target = Mapping::status($t->status, $t->assigneeSrcId !== null, $this->jsonOpt($ctx, 'status_map'))['value'];
+        if (!Mapping::advances($from, $target)) {
+            return;
+        }
+        $when = Mapping::localDate($t->updatedAt) ?? date('Y-m-d H:i:s');
+        if (strtotime((string) $row['date_mod']) > strtotime($when)) {
+            $ctx->counters->detail('status', 'kept_edited_in_glpi');
+            return;
+        }
+        if ($ctx->dryRun()) {
+            $ctx->counters->detail('status', 'would_advance');
+            $ctx->log(sprintf('[dry] ticket %s: status would move %s -> %s', $t->srcId, Mapping::statusName($from), Mapping::statusName($target)));
+            return;
+        }
+        // The followup first (core may react to a followup), then the status, which wins.
+        (new \ITILFollowup())->add([
+            'itemtype'      => 'Ticket',
+            'items_id'      => $ticketId,
+            'content'       => sprintf('Status moved forward by the importer: %s -> %s (source status: %s).', Mapping::statusName($from), Mapping::statusName($target), $t->status),
+            'is_private'    => 1,
+            'users_id'      => 0,
+            '_disablenotif' => true,
+        ]);
+        $set = ['status' => $target, 'date_mod' => $when];
+        if ($target === Mapping::SOLVED || $target === Mapping::CLOSED) {
+            $set['solvedate'] = $when;
+        }
+        if ($target === Mapping::CLOSED) {
+            $set['closedate'] = $when;
+        }
+        $DB->update('glpi_tickets', $set, ['id' => $ticketId]);
+        $ctx->counters->detail('status', 'advanced');
+    }
+
     private function linkAsset(int $ticketId, Context $ctx): void
     {
         try {

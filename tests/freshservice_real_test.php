@@ -83,7 +83,7 @@ check('ticket: the category path is made of the same words as the form\'s choice
 
 // ---- mapping of the real statuses
 $mapped = array_map(fn ($t) => Mapping::status($t->status, $t->assigneeSrcId !== null), $tp->items);
-check('mapping: "In Progress" is known (Assigned/New), "Waiting on Approval" is a guess = Waiting', Mapping::status('In Progress', true) === ['value' => 2, 'known' => true] && Mapping::status('Waiting on Approval', true) === ['value' => 4, 'known' => false]);
+check('mapping: "In Progress" is known (Assigned/New), "Waiting on Approval" is the GLPI status Approval (10), known', Mapping::status('In Progress', true) === ['value' => 2, 'known' => true] && Mapping::status('Waiting on Approval', true) === ['value' => 10, 'known' => true]);
 check('mapping: a custom wording is guessed by its words', Mapping::guessStatus('on hold - vendor', true) === 4 && Mapping::guessStatus('completed', true) === 5 && Mapping::guessStatus('rejected', true) === 6 && Mapping::guessStatus('something else', false) === 1);
 check('mapping: the source\'s own map beats the guess', Mapping::status('Waiting on Approval', true, ['waiting on approval' => 2]) === ['value' => 2, 'known' => true]);
 

@@ -14,10 +14,31 @@ final class Mapping
     public const WAITING  = 4;
     public const SOLVED   = 5;
     public const CLOSED   = 6;
+    public const APPROVAL = 10; // GLPI 11 ticket status "Approval"
+
+    /** Forward order of GLPI ticket statuses (Approval sits after Pending, before Solved). */
+    private const STATUS_RANK = [1 => 1, 2 => 2, 3 => 3, 4 => 4, 10 => 5, 5 => 6, 6 => 7];
+    private const STATUS_NAME = [1 => 'New', 2 => 'Processing (assigned)', 3 => 'Processing (planned)', 4 => 'Pending', 10 => 'Approval', 5 => 'Solved', 6 => 'Closed'];
+
+    /**
+     * The import rule for a ticket that is already in GLPI: its status only moves FORWARD, and only while it is still
+     * open or pending (never from Solved/Closed, never backwards, never an unknown status). Pure.
+     */
+    public static function advances(int $current, int $target): bool
+    {
+        $c = self::STATUS_RANK[$current] ?? null;
+        $t = self::STATUS_RANK[$target] ?? null;
+        return $c !== null && $t !== null && $c < self::STATUS_RANK[self::SOLVED] && $t > $c;
+    }
+
+    public static function statusName(int $status): string
+    {
+        return self::STATUS_NAME[$status] ?? ('status ' . $status);
+    }
 
     public const DEFAULT_STATUS = [
         'open' => 'assigned_or_new', 'in progress' => 'assigned_or_new', 'pending' => self::WAITING, 'on hold' => self::WAITING,
-        'resolved' => self::SOLVED, 'closed' => self::CLOSED, 'cancelled' => self::CLOSED,
+        'waiting on approval' => self::APPROVAL, 'resolved' => self::SOLVED, 'closed' => self::CLOSED, 'cancelled' => self::CLOSED,
     ];
     public const DEFAULT_PRIORITY = ['low' => 2, 'medium' => 3, 'high' => 4, 'urgent' => 5];
     public const DEFAULT_TYPE     = ['incident' => 1, 'service request' => 2, 'request' => 2];

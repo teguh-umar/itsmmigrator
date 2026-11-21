@@ -49,12 +49,12 @@ $run = file_get_contents(ITSM_ROOT . '/src/Console/RunCommand.php');
 check('RunCommand has no API key option', !preg_match("/addOption\\('(api-key|api_key|key|token)'/", $run));
 
 // The docs name the commands GLPI actually loads, never the spec's bare names, and never an API key option.
-foreach (['README.md', 'docs/runbook-v0.1.0-rc32.md'] as $doc) {
+foreach (['README.md', 'docs/runbook-v0.1.0-rc33.md'] as $doc) {
     $d = (string) file_get_contents(ITSM_ROOT . '/' . $doc);
     check("$doc uses plugins:itsmmigrator:* command names", str_contains($d, 'plugins:itsmmigrator:run') && str_contains($d, 'plugins:itsmmigrator:verify'));
     check("$doc never shows a bare itsmmigrator:<command>", preg_match('/(?<!plugins:)\bitsmmigrator:(run|verify|purge)\b/', $d) === 0);
 }
-$rb = (string) file_get_contents(ITSM_ROOT . '/docs/runbook-v0.1.0-rc32.md');
+$rb = (string) file_get_contents(ITSM_ROOT . '/docs/runbook-v0.1.0-rc33.md');
 check('runbook version matches setup.php', preg_match("/'PLUGIN_ITSMMIGRATOR_VERSION', '([^']+)'/", $setup, $m) === 1 && str_contains($rb, $m[1]));
 check('runbook says the key is never typed on a command line', str_contains($rb, 'Never put the Freshservice API key'));
 $ver = (string) file_get_contents(ITSM_ROOT . '/src/Verifier.php');

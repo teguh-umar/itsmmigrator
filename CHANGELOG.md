@@ -1,4 +1,10 @@
 # Changelog
+## 0.1.0-rc33
+
+- **Import rule: a ticket already in GLPI follows its source status forward.** When a ticket that was imported earlier comes back from the source (it was updated there), its GLPI status now moves forward to the mapped source status: New / Assigned / Planned / Pending -> Approval -> Solved -> Closed. It moves only while the GLPI ticket is still open or pending, never backwards, never reopens a Solved or Closed ticket, and is skipped (counted `kept_edited_in_glpi`) when the GLPI ticket was edited after the source's last update. Each move leaves one private followup ("Status moved forward by the importer: Pending -> Solved (source status: Resolved)"). A dry run counts `would_advance` and writes nothing. Counted under `status`: advanced / would_advance / kept_edited_in_glpi.
+- **"Waiting on Approval" maps to the GLPI status Approval (10) by default.** No `status_map` entry is needed any more (a source's own map still wins). Needs a GLPI whose ticket statuses include Approval (11.0.13 does).
+- **Tests.** status_advance_test 15. Offline suite OK.
+
 ## 0.1.0-rc32
 
 - **A later link replaces the stale "no asset" note.** The monitor-ticket asset link (importer and `link-assets`) writes a private note "Asset (monitor): <name> (<ip>): no asset with that name exists in GLPI" when the asset is missing (or "more than one asset has that name"). Found while the first real run was going: with no wireless assets in GLPI yet, each new monitor ticket got that note, and until now a later `link-assets` run would have linked those tickets but left the note, so a linked ticket would still say "no asset". Now a successful link (new, or already there) REPLACES such a note with "Asset (monitor): <name> (<ip>): now linked to the GLPI asset of that name (an earlier note here said there was none)". It is replaced, never deleted (the history stays), only a note that is really stale is touched, and the new text still carries the marker so no second note is ever added. Run `link-assets` again after the assets exist to clear the notes already written.
