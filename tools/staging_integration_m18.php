@@ -106,7 +106,9 @@ chk('dry run: 2 forms and 8 questions counted, nothing written', $c === 0 && $fo
 [$c, $out] = $exec([]);
 $f = $forms();
 chk('real run: 2 forms, 2 categories, 8 questions, none failed', $c === 0 && count($f) === 2 && preg_match('/categories\s+2/', $out) && preg_match('/forms\s+2/', $out) && preg_match('/questions\s+8/', $out) && preg_match('/forms_failed\s+0/', $out), trim($out));
-chk('every form is INACTIVE and a DRAFT, in the source entity, not recursive', count($f) === 2 && !array_filter($f, fn ($x) => (int) $x['is_active'] !== 0 || (int) $x['is_draft'] !== 1 || (int) $x['entities_id'] !== $entity || (int) $x['is_recursive'] !== 0));
+chk('every form is INACTIVE and NOT a GLPI draft (drafts are hidden and purged), in the source entity, not recursive', count($f) === 2 && !array_filter($f, fn ($x) => (int) $x['is_active'] !== 0 || (int) $x['is_draft'] !== 0 || (int) $x['entities_id'] !== $entity || (int) $x['is_recursive'] !== 0));
+$listed = $count('glpi_forms_forms', ['entities_id' => $entity, 'is_deleted' => 0, 'is_draft' => 0]);
+chk('the forms show in the Forms list (the list shows non-draft forms)', $listed === 2, 'listed=' . $listed);
 $f1 = $f[0] ?? null;
 chk('name, description and html header carried over', $f1 && $f1['name'] === "$tag-Item1" && $f1['description'] === 'short' && str_contains((string) $f1['header'], 'long'), json_encode($f1 ? [$f1['name'], $f1['description']] : null));
 $qs = $f1 ? iterator_to_array($DB->request(['SELECT' => ['q.*'], 'FROM' => 'glpi_forms_questions AS q', 'INNER JOIN' => ['glpi_forms_sections AS s' => ['ON' => ['q' => 'forms_sections_id', 's' => 'id']]], 'WHERE' => ['s.forms_forms_id' => $f1['id']], 'ORDER' => 'q.vertical_rank']), false) : [];
