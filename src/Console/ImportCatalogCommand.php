@@ -13,7 +13,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 /**
  * Creates GLPI Forms from a source's service catalog: one category tree, one Form per catalog item, its custom fields
- * as questions. Every Form is created INACTIVE and as a DRAFT, in the source's target entity, so nothing shows in the
+ * as questions. Every Form is created INACTIVE (never flagged is_draft: GLPI uses that flag for the autosaved draft of a new form, hides it from the Forms list and purges it after a retention period), in the source's target entity, so nothing shows in the
  * service catalog until an administrator has reviewed it and switched it on. A question's "required" flag is kept; it
  * only applies when someone submits the form, never when an administrator edits or saves it.
  *
@@ -27,7 +27,7 @@ class ImportCatalogCommand extends AbstractCommand
     {
         parent::configure();
         $this->setName('plugins:itsmmigrator:import-catalog');
-        $this->setDescription('Create inactive draft GLPI Forms from the service catalog of a source');
+        $this->setDescription('Create inactive GLPI Forms from the service catalog of a source');
         $this->addOption('username', 'u', InputOption::VALUE_REQUIRED, 'GLPI login to run as (required)');
         $this->addOption('source', null, InputOption::VALUE_REQUIRED, 'Source id (required)');
         $this->addOption('dry-run', null, InputOption::VALUE_NONE, 'Read and count only, write nothing');
@@ -137,7 +137,7 @@ class ImportCatalogCommand extends AbstractCommand
         }
         ksort($kinds);
         $output->writeln('question kinds: ' . json_encode($kinds));
-        $output->writeln($dry ? 'Dry run: nothing written ("forms" = would be created).' : 'Done. Every Form is inactive and a draft: review it, then switch it on.');
+        $output->writeln($dry ? 'Dry run: nothing written ("forms" = would be created).' : 'Done. Every Form is inactive: review it in Administration > Forms, then switch it on.');
         return $n['forms_failed'] > 0 ? self::FAILURE : self::SUCCESS;
     }
 
@@ -151,7 +151,7 @@ class ImportCatalogCommand extends AbstractCommand
         $form   = new \Glpi\Form\Form();
         $formId = (int) $form->add([
             'name' => mb_substr($map['name'], 0, 255), 'description' => $map['description'], 'header' => $map['header'],
-            'entities_id' => $entity, 'is_recursive' => 0, 'is_active' => 0, 'is_draft' => 1, 'forms_categories_id' => $category,
+            'entities_id' => $entity, 'is_recursive' => 0, 'is_active' => 0, 'is_draft' => 0, 'forms_categories_id' => $category,
         ]);
         if ($formId <= 0) {
             throw new \RuntimeException('GLPI refused the form');
