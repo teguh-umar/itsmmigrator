@@ -102,6 +102,14 @@ final class RunView
         echo '</div></div>';
 
         echo Html::scriptBlock(self::script());
+
+        echo '<div class="card mb-3"><div class="card-header"><h3 class="card-title">' . htmlescape(__('Service catalog -> Forms', 'itsmmigrator')) . '</h3></div><div class="card-body">'
+            . '<p class="text-muted">' . htmlescape(__('Creates one GLPI Form per service catalog item of the source selected above (its fields become questions). Every Form is created inactive: review it in Administration > Forms, then switch it on. An item already imported is never created again, so it is safe to click twice or to run it again.', 'itsmmigrator')) . '</p>'
+            . '<button type="button" class="btn btn-outline-primary me-2" id="itsm-cat-count"><i class="ti ti-list-numbers me-1"></i>' . htmlescape(__('Count the catalog (writes nothing)', 'itsmmigrator')) . '</button>'
+            . '<button type="button" class="btn btn-primary" id="itsm-cat-run"><i class="ti ti-forms me-1"></i>' . htmlescape(__('Import the catalog as inactive Forms', 'itsmmigrator')) . '</button>'
+            . '<pre id="itsm-cat-log" class="mt-3 p-3 rounded" style="background:#1e1e2d;color:#00ff9d;min-height:3rem;max-height:14rem;overflow:auto;font-size:.85rem" aria-live="polite"></pre>'
+            . '</div></div>';
+        echo Html::scriptBlock(self::catalogScript());
     }
 
     private static function check(string $name, string $label, bool $checked): void
@@ -156,6 +164,59 @@ final class RunView
     public static function pageUrl(): string
     {
         return '/plugins/itsmmigrator/front/run.php';
+    }
+
+    /** The catalog buttons: count, or start and then step until done. The browser holds only the token the server gave. */
+    private static function catalogScript(): string
+    {
+        $ajax = json_encode('/plugins/itsmmigrator/ajax/catalog.php');
+        return <<<JS
+(function () {
+    const AJAX = {$ajax};
+    const log = document.getElementById('itsm-cat-log');
+    const count = document.getElementById('itsm-cat-count');
+    const run = document.getElementById('itsm-cat-run');
+    let busy = false;
+    function token() { const m = document.querySelector('meta[property="glpi:csrf_token"]'); return m ? m.getAttribute('content') : ''; }
+    function say(t) { log.textContent += t + '\\n'; log.scrollTop = log.scrollHeight; }
+    function post(data) {
+        return fetch(AJAX, { method: 'POST', credentials: 'same-origin', body: new URLSearchParams(data),
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-Glpi-Csrf-Token': token() } })
+            .then(r => r.text().then(t => {
+                try { return JSON.parse(t); }
+                catch (e) { throw new Error('HTTP ' + r.status + ', the server did not answer JSON: ' + t.replace(/<[^>]*>/g, ' ').replace(/\\s+/g, ' ').trim().slice(0, 200)); }
+            }));
+    }
+    function line(c) { return Object.keys(c).map(k => k + ' ' + c[k]).join(', '); }
+    function lock(on) { busy = on; count.disabled = on; run.disabled = on; }
+    function sid() { return document.getElementById('itsm-source').value; }
+    count.addEventListener('click', function () {
+        if (busy) { return; }
+        lock(true); log.textContent = ''; say('Reading the catalog (one request per item, this takes about a minute)...');
+        post({ action: 'count', sources_id: sid() }).then(r => {
+            if (!r.success) { say(r.message || 'Failed'); return; }
+            say('Would be created: ' + line(r.counts)); say('Nothing was written.');
+        }).catch(e => say(e.message)).finally(() => lock(false));
+    });
+    run.addEventListener('click', function () {
+        if (busy) { return; }
+        if (!window.confirm('Create the Forms now? They are created inactive.')) { return; }
+        lock(true); log.textContent = ''; say('Reading the catalog (one request per item, this takes about a minute)...');
+        const total = {};
+        const add = c => Object.keys(c).forEach(k => { total[k] = (total[k] || 0) + c[k]; });
+        function next(token) {
+            return post(token ? { action: 'step', sources_id: sid(), token: token } : { action: 'start', sources_id: sid() }).then(r => {
+                if (!r.success) { say(r.message || 'Failed'); return; }
+                if (r.busy) { say('Another import of this source is running. Wait for it to end, then click again (nothing is lost, nothing is doubled).'); return; }
+                add(r.counts); say('Batch done, ' + r.remaining + ' item(s) left.');
+                if (r.done) { say('Done: ' + line(total)); say('Every Form is inactive: review it in Administration > Forms, then switch it on.'); return; }
+                return next(r.token);
+            });
+        }
+        next('').catch(e => say(e.message + ' (what is imported stays; click again to go on)')).finally(() => lock(false));
+    });
+})();
+JS;
     }
 
     /** The run loop: start, then step until done. The run id is all the browser holds. */

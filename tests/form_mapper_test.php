@@ -38,11 +38,12 @@ check('a dropdown with no choices and an unknown type become short texts (no fie
 check('an item with no fields gives a form with no question', M::map(['name' => 'X', 'custom_fields' => []])['questions'] === [] && M::map([])['name'] === 'Service item');
 check('a long label is cut to 255 characters', mb_strlen(M::map(['custom_fields' => [['label' => str_repeat('é', 400), 'field_type' => 'custom_text']]])['questions'][0]['name']) === 255);
 
-$cmd = (string) file_get_contents(ITSM_ROOT . '/src/Console/ImportCatalogCommand.php');
+$cmd = (string) file_get_contents(ITSM_ROOT . '/src/Catalog/CatalogImporter.php'); // the logic lives here (command and Run page share it)
+$cli = (string) file_get_contents(ITSM_ROOT . '/src/Console/ImportCatalogCommand.php');
 check('every Form is created INACTIVE and NOT flagged is_draft (GLPI hides such a form from the list and purges it), never recursive', str_contains($cmd, "'is_active' => 0, 'is_draft' => 0") && !str_contains($cmd, "'is_draft' => 1") && str_contains($cmd, "'is_recursive' => 0"));
 check('an item already imported is left alone (map ok), so a second run adds nothing', str_contains($cmd, "MapRepository::find(\$source, 'catalog_item'") && str_contains($cmd, 'forms_exist'));
 check('a failed item is recorded in the map and counted, the run goes on', str_contains($cmd, 'MapRepository::markFailed') && str_contains($cmd, 'forms_failed'));
-check('the output is counts only (no name is written)', !preg_match('/writeln\([^;]*\$(item|map|c)\[/', $cmd));
+check('the output is counts only (no name is written)', !preg_match('/writeln\([^;]*\$(item|map|c)\[/', $cli));
 check('a dry run writes nothing', str_contains($cmd, 'if ($dry) {'));
 check('the adapter interface has the read-only catalog call', str_contains((string) file_get_contents(ITSM_ROOT . '/src/Adapter/SourceAdapterInterface.php'), 'fetchServiceCatalog'));
 
