@@ -25,4 +25,12 @@ check('the writer links before finalize and a failure there never fails the tick
 check('custom assets (Wireless, Storage, Security...) share one table: each definition is searched only for its own rows', str_contains($src, "\$where['assets_assetdefinitions_id'] = \$type::getDefinition()->getID();") && str_contains($src, '\Glpi\Asset\Asset::class'));
 check('a second run adds nothing: link kept, note added once', str_contains($src, "'glpi_items_tickets'") && str_contains($src, "'%' . self::MARK . '%'"));
 
+$dev = ['name' => 'SRV-A <b>', 'ip' => '192.0.2.10'];
+check('a stale "no asset" note and a "more than one" note are recognised, as stored (html escaped or not)', L::isStale(L::note($dev, 0)) && L::isStale(L::note($dev, 2)) && L::isStale(htmlspecialchars(L::note($dev, 0), ENT_QUOTES)));
+check('the resolved note is not stale (a second link does not rewrite it) and it still carries the marker (no duplicate note is added)', !L::isStale(L::resolvedNote($dev)) && str_contains(L::resolvedNote($dev), L::MARK) && str_contains(L::resolvedNote($dev), 'now linked'));
+check('the resolved note escapes the name', str_contains(L::resolvedNote($dev), 'SRV-A &lt;b&gt;'));
+check('an unrelated note is never stale', !L::isStale('<p>Attachment not imported: x</p>') && !L::isStale('<p>Asset (monitor): x (1.2.3.4): now linked</p>'));
+$src2 = (string) file_get_contents(ITSM_ROOT . '/src/AssetLinker.php');
+check('a successful link (new or already there) replaces the stale note, never deletes it', str_contains($src2, 'self::resolveStaleNote($ticketId, $device)') && str_contains($src2, "\$DB->update('glpi_itilfollowups', ['content' => self::resolvedNote") && !str_contains($src2, "delete('glpi_itilfollowups'"));
+
 done();

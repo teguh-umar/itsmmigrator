@@ -45,6 +45,30 @@ final class AssetLinker
         return '<p><b>' . self::MARK . '</b> ' . htmlspecialchars($device['name'], ENT_QUOTES) . ' (' . htmlspecialchars($device['ip'], ENT_QUOTES) . '): ' . $why . '.</p>';
     }
 
+    /** The text a stale "no asset / more than one" note is replaced by once the ticket is linked. Pure. */
+    public static function resolvedNote(array $device): string
+    {
+        return '<p><b>' . self::MARK . '</b> ' . htmlspecialchars($device['name'], ENT_QUOTES) . ' (' . htmlspecialchars($device['ip'], ENT_QUOTES) . '): now linked to the GLPI asset of that name (an earlier note here said there was none).</p>';
+    }
+
+    /** True when a note text says the asset was missing or ambiguous (so it is stale once the ticket is linked). Pure. */
+    public static function isStale(string $content): bool
+    {
+        $t = html_entity_decode($content, ENT_QUOTES | ENT_HTML5);
+        return str_contains($t, self::MARK) && (str_contains($t, 'no asset with that name exists in GLPI') || str_contains($t, 'more than one asset has that name'));
+    }
+
+    /** Replaces (never deletes) the stale note of a ticket that is linked now: the history stays, the text is true. */
+    private static function resolveStaleNote(int $ticketId, array $device): void
+    {
+        global $DB;
+        foreach ($DB->request(['SELECT' => ['id', 'content'], 'FROM' => 'glpi_itilfollowups', 'WHERE' => ['itemtype' => 'Ticket', 'items_id' => $ticketId, ['content' => ['LIKE', '%' . self::MARK . '%']]]]) as $f) {
+            if (self::isStale((string) $f['content'])) {
+                $DB->update('glpi_itilfollowups', ['content' => self::resolvedNote($device)], ['id' => (int) $f['id']]);
+            }
+        }
+    }
+
     /**
      * Link (or note) one ticket. Safe to repeat: a link that exists is kept, a note is added once.
      *
@@ -91,6 +115,9 @@ final class AssetLinker
             $have = countElementsInTable('glpi_items_tickets', ['tickets_id' => $ticketId, 'itemtype' => $type, 'items_id' => $id]) > 0;
             if (!$have && !$dryRun) {
                 (new \Item_Ticket())->add(['tickets_id' => $ticketId, 'itemtype' => $type, 'items_id' => $id, '_disablenotif' => true]);
+            }
+            if (!$dryRun) {
+                self::resolveStaleNote($ticketId, $device); // an earlier "no asset" note must not stay on a ticket that is linked now
             }
             return $have ? 'already' : 'linked';
         }
