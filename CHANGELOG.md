@@ -1,4 +1,9 @@
 # Changelog
+## 0.1.0-rc30
+
+- **A PHP attachment is imported under a harmless name instead of being skipped.** A file whose extension PHP would run (`.php`, `.phtml`, `.phar`, `.phps`, `.pht`, `.php5`...) gets an underscore after "ph": `.php` -> `.ph_p`, `.phtml` -> `.ph_tml`, `.php5` -> `.ph_p5`, `.phar` -> `.ph_ar`. It is still plain to see that it is a PHP file, and no server will run it. The Document is stored under the new name and its comment keeps the original file name and a warning ("rename it back only on a machine you trust"). Any other name is untouched. The size and type rule judge the NEW name, so **the document type `ph_p` (and `ph_tml`, `ph_p5`... if such files exist) must be added as uploadable in GLPI** (Setup > Dropdowns > Document types); `.php` itself stays NOT uploadable. A `.php` attachment skipped before is picked up by the "Fetch again the attachments GLPI refused before" pass once `ph_p` is uploadable; its "not imported" note then becomes "imported later".
+- **Tests.** attachment_rule_test 16 (renaming rules, the writer wiring). Offline suite OK.
+
 ## 0.1.0-rc29
 
 - **A `sources_id` from a request is now access-checked in every endpoint** (hub entity rule 6, orchestrator finding on rc28). One shared guard, `Source::accessible($id)`: the source must exist and its target entity must be reachable by the signed-in user; otherwise the endpoint answers "unknown source" (it never says which). Used by `ajax/catalog.php`, the Run page (`WebRun::start`, which already checked the entity but not through the guard) and the category list (`ajax/categories.php` through `CategoryListing`). Each endpoint still checks its own right first (the run right for a run and the catalog, the configuration right for the categories). The guard deliberately does not call `can()`: on a Source that means the configuration right, which a user who may only run does not have, and it would have locked that user out of the Run page.

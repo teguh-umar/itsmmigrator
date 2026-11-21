@@ -579,7 +579,8 @@ final class TicketWriter
 
         // Download right away: Freshservice links are short-lived.
         $dir  = defined('GLPI_TMP_DIR') ? GLPI_TMP_DIR : sys_get_temp_dir();
-        $safe = preg_replace('/[^A-Za-z0-9._-]+/', '_', $a->name) ?: 'attachment';
+        $docName = AttachmentRule::safeName($a->name); // a PHP file keeps its information but gets a harmless extension (.php -> .ph_p)
+        $safe = preg_replace('/[^A-Za-z0-9._-]+/', '_', $docName) ?: 'attachment';
         $tmpName = 'itsm_' . bin2hex(random_bytes(6)) . '_' . $safe;
         $path = rtrim((string) $dir, '/\\') . DIRECTORY_SEPARATOR . $tmpName;
         $adapter->downloadAttachment($a, $path);
@@ -596,13 +597,14 @@ final class TicketWriter
             }
             $action = $docId > 0 ? MapRepository::MATCHED : MapRepository::CREATED;
             if ($docId === 0) {
-                $why = AttachmentRule::refusal($a->name, (int) filesize($path), (int) ($GLOBALS['CFG_GLPI']['document_max_size'] ?? 0), $this->uploadableExtensions());
+                $why = AttachmentRule::refusal($docName, (int) filesize($path), (int) ($GLOBALS['CFG_GLPI']['document_max_size'] ?? 0), $this->uploadableExtensions());
                 if ($why !== null) {
                     $again ? $this->stillRefused($a, $why, $row, $ctx) : $this->skipAttachment($a, $t, $ticketId, $why, $row, $ctx);
                     return;
                 }
                 $docId = (int) (new \Document())->add([
-                    'name'               => $a->name,
+                    'name'               => $docName,
+                    'comment'            => $docName !== $a->name ? 'Original file name in the source: ' . $a->name . '. Stored as ' . $docName . ' so that no server runs it; rename it back only on a machine you trust.' : '',
                     'entities_id'        => $ctx->targetEntity(),
                     'is_recursive'       => 0,
                     '_filename'          => [$tmpName],

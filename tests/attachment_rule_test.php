@@ -18,4 +18,14 @@ check('size wording', R::size(500) === '1 KB' && R::size(2048) === '2 KB' && R::
 
 $tw = (string) file_get_contents(ITSM_ROOT . '/src/Writer/TicketWriter.php');
 check('writer: a refused file becomes a private followup and a skipped map, never a failed ticket', str_contains($tw, 'AttachmentRule::refusal(') && str_contains($tw, 'markSkipped($rowId, $why)') && str_contains($tw, "'is_private' => 1") && !str_contains($tw, "throw new \RuntimeException('GLPI refused the document')"));
+// a file PHP would run keeps its information but gets a harmless extension
+check('.php -> .ph_p, the rest of the name untouched', R::safeName('report.php') === 'report.ph_p' && R::safeName('a.b.php') === 'a.b.ph_p');
+check('.phtml, .php5, .phar, .phps, .pht -> underscore after ph', R::safeName('x.phtml') === 'x.ph_tml' && R::safeName('x.php5') === 'x.ph_p5' && R::safeName('x.phar') === 'x.ph_ar' && R::safeName('x.phps') === 'x.ph_ps' && R::safeName('x.pht') === 'x.ph_t');
+check('upper case is handled and the new extension is lower case', R::safeName('X.PHP') === 'X.ph_p');
+check('other names are returned as they are (php inside the name, php.txt, no extension, other types)', R::safeName('php.txt') === 'php.txt' && R::safeName('x.php.txt') === 'x.php.txt' && R::safeName('phpinfo') === 'phpinfo' && R::safeName('a.json') === 'a.json' && R::safeName('photo.png') === 'photo.png');
+check('wasRenamed tells it', R::wasRenamed('a.php') === true && R::wasRenamed('a.txt') === false);
+check('the renamed file is judged by its new extension (ph_p must be an uploadable type, .php never is)', R::refusal(R::safeName('a.php'), 10, 50, ['ph_p']) === null && R::refusal(R::safeName('a.php'), 10, 50, ['txt']) !== null);
+$tw2 = (string) file_get_contents(ITSM_ROOT . '/src/Writer/TicketWriter.php');
+check('the writer stores the renamed file, judges the renamed name and keeps the original name in the comment', str_contains($tw2, '$docName = AttachmentRule::safeName($a->name)') && str_contains($tw2, 'AttachmentRule::refusal($docName') && str_contains($tw2, "'name'               => \$docName") && str_contains($tw2, 'Original file name in the source'));
+
 done();

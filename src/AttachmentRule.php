@@ -25,6 +25,27 @@ final class AttachmentRule
         return null;
     }
 
+    /**
+     * The name a file is stored under in GLPI. A file that PHP would run (.php, .phtml, .phar, .php5...) keeps its
+     * information but loses its power: the extension gets an underscore after "ph" (.php -> .ph_p, .phtml -> .ph_tml,
+     * .php5 -> .ph_p5, .phar -> .ph_ar), so it is still plain to see that it is a PHP file and no server will run it.
+     * Any other name is returned as it is. Pure.
+     */
+    public static function safeName(string $name): string
+    {
+        $ext = pathinfo($name, PATHINFO_EXTENSION);
+        if ($ext !== '' && preg_match('/^ph(p\d?|tml|ar|ps|t)$/i', $ext) === 1) {
+            return substr($name, 0, -strlen($ext)) . 'ph_' . strtolower(substr($ext, 2));
+        }
+        return $name;
+    }
+
+    /** True when safeName() changed the name. Pure. */
+    public static function wasRenamed(string $name): bool
+    {
+        return self::safeName($name) !== $name;
+    }
+
     public static function size(int $bytes): string
     {
         return $bytes >= 1048576 ? sprintf('%.1f MB', $bytes / 1048576) : sprintf('%d KB', max(1, (int) round($bytes / 1024)));
