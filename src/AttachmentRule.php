@@ -26,16 +26,17 @@ final class AttachmentRule
     }
 
     /**
-     * The name a file is stored under in GLPI. A file that PHP would run (.php, .phtml, .phar, .php5...) keeps its
-     * information but loses its power: the extension gets an underscore after "ph" (.php -> .ph_p, .phtml -> .ph_tml,
-     * .php5 -> .ph_p5, .phar -> .ph_ar), so it is still plain to see that it is a PHP file and no server will run it.
-     * Any other name is returned as it is. Pure.
+     * The name a file is stored under in GLPI. A file that PHP would run (.php, .phtml, .phar, .php5, .phps, .pht)
+     * keeps its information but loses its power: its extension becomes .ph_p, ONE harmless extension for every variant
+     * (the real extension stays in the document title and comment), so only one GLPI document type is needed and
+     * no server will run it. The extension is replaced, never added to (x.phtml.ph_p could still run on a server
+     * with a multiple-extension handler). Any other name is returned as it is. Pure.
      */
     public static function safeName(string $name): string
     {
         $ext = pathinfo($name, PATHINFO_EXTENSION);
         if ($ext !== '' && preg_match('/^ph(p\d?|tml|ar|ps|t)$/i', $ext) === 1) {
-            return substr($name, 0, -strlen($ext)) . 'ph_' . strtolower(substr($ext, 2));
+            return substr($name, 0, -strlen($ext)) . 'ph_p';
         }
         return $name;
     }

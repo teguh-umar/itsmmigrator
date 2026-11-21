@@ -603,8 +603,8 @@ final class TicketWriter
                     return;
                 }
                 $docId = (int) (new \Document())->add([
-                    'name'               => $docName,
-                    'comment'            => $docName !== $a->name ? 'Original file name in the source: ' . $a->name . '. Stored as ' . $docName . ' so that no server runs it; rename it back only on a machine you trust.' : '',
+                    'name'               => $a->name, // the title keeps the real name, e.g. x.phtml
+                    'comment'            => $docName !== $a->name ? 'Original file name in the source: ' . $a->name . '. Stored as ' . $docName . ' (extension .ph_p) so that no server runs it; rename it back only on a machine you trust.' : '',
                     'entities_id'        => $ctx->targetEntity(),
                     'is_recursive'       => 0,
                     '_filename'          => [$tmpName],
