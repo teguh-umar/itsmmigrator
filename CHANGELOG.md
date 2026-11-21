@@ -1,4 +1,9 @@
 # Changelog
+## 0.1.0-rc28
+
+- **Fix in the catalog import (rc27): the per-source lock.** rc27 took the database lock with the query builder, which refuses a query with no table ("Missing table name"), so every real (non-dry) import batch would have stopped at once, on the Run page and in the console. The lock is now taken and released with plain `GET_LOCK` / `RELEASE_LOCK` statements. Found by tools/staging_integration_m18.php (batch checks) before any use; the dry run and the earlier imports were not affected. rc27 was never pushed and should not be used.
+- **Tests.** tools/staging_integration_m18.php 20 checks pass on staging 2 (batch of 1, a second click after the end, a half-made form of a dead run). Offline suite OK.
+
 ## 0.1.0-rc27
 
 - **Run page: a "Service catalog -> Forms" card with two buttons.** "Count the catalog (writes nothing)" reads the source's catalog and shows what would be created. "Import the catalog as inactive Forms" asks for confirmation, then creates the Forms in batches of 8 (one request per batch, a progress line per batch) until done. Every Form is created inactive and not flagged as a GLPI draft. New endpoint `ajax/catalog.php`: POST only, CSRF in the header, same right as the Run page; it reads only `action` (count, start, step), `sources_id` (an integer) and `token` (32 hex characters it gave itself); no URL, path, JSON, HTML or SQL comes in. The catalog is read once (one GET per item) and kept in GLPI's temp folder under that token for the next batches; it is removed at the end.

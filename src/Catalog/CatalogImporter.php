@@ -78,7 +78,8 @@ final class CatalogImporter
         $kinds  = [];
         $lock   = 'itsm_catalog_' . (int) $src->getID();
         if (!$dry) {
-            $got = $DB->request(['SELECT' => new \Glpi\DBAL\QueryExpression("GET_LOCK('" . $lock . "', 0) AS l")])->current();
+            $res = $DB->doQuery("SELECT GET_LOCK('" . $lock . "', 0) AS l");
+            $got = $res ? $res->fetch_assoc() : null;
             if ((int) ($got['l'] ?? 0) !== 1) {
                 return ['busy' => true, 'done' => false, 'remaining' => 0, 'counts' => $counts, 'kinds' => $kinds];
             }
@@ -167,7 +168,7 @@ final class CatalogImporter
             return ['busy' => false, 'done' => $remaining === 0, 'remaining' => $remaining, 'counts' => $counts, 'kinds' => $kinds];
         } finally {
             if (!$dry) {
-                $DB->request(['SELECT' => new \Glpi\DBAL\QueryExpression("RELEASE_LOCK('" . $lock . "') AS r")])->current();
+                $DB->doQuery("SELECT RELEASE_LOCK('" . $lock . "')");
             }
         }
     }
