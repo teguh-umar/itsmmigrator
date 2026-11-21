@@ -132,6 +132,30 @@ chk('an administrator can save the draft form (required questions are about answ
 [$c, $out] = $exec([]);
 chk('second run adds nothing: 2 exist, 0 created', count($forms()) === 2 && preg_match('/forms_exist\s+2/', $out) && preg_match('/forms\s+0/', $out), trim($out));
 
+// ---- batch by batch (what the Run page does): one form per request, no duplicate, the same result
+foreach ($forms() as $x) { (new \Glpi\Form\Form())->delete(['id' => (int) $x['id']], true); }
+$DB->delete('glpi_plugin_itsmmigrator_maps', ['sources_id' => $sid, 'src_type' => ['catalog_item', 'catalog_category']]);
+$DB->delete('glpi_forms_categories', ['name' => ["$tag-Child"]]); $DB->delete('glpi_forms_categories', ['name' => ["$tag-Parent"]]);
+$srcObj = new \GlpiPlugin\Itsmmigrator\Source(); $srcObj->getFromDB($sid);
+$prep = \GlpiPlugin\Itsmmigrator\Catalog\CatalogImporter::prepare($srcObj);
+$cat  = \GlpiPlugin\Itsmmigrator\Catalog\CatalogImporter::load($prep['token']);
+chk('the catalog is kept for the next batches (token file)', is_array($cat) && count($cat['items']) === 2);
+$steps = 0; $done = false; $createdTotal = 0;
+while (!$done && $steps < 10) { $r = \GlpiPlugin\Itsmmigrator\Catalog\CatalogImporter::process($srcObj, $cat, false, 1); $done = $r['done']; $createdTotal += $r['counts']['forms']; $steps++; }
+chk('batch of 1: two batches make the 2 forms, the last one says done', count($forms()) === 2 && $createdTotal === 2 && $done && $steps === 2, "steps=$steps created=$createdTotal");
+$r = \GlpiPlugin\Itsmmigrator\Catalog\CatalogImporter::process($srcObj, $cat, false, 1);
+chk('another click after the end creates nothing', count($forms()) === 2 && $r['counts']['forms'] === 0 && $r['done']);
+// a run that died half way: the Form exists (id already in the map row) but the item is not ok
+$victim = $DB->request(['FROM' => 'glpi_plugin_itsmmigrator_maps', 'WHERE' => ['sources_id' => $sid, 'src_type' => 'catalog_item', 'src_id' => '9100001']])->current();
+$oldId = (int) $victim['items_id'];
+$DB->update('glpi_plugin_itsmmigrator_maps', ['status' => 'in_progress'], ['id' => (int) $victim['id']]);
+$r = \GlpiPlugin\Itsmmigrator\Catalog\CatalogImporter::process($srcObj, $cat, false, 8);
+$nowRow = $DB->request(['FROM' => 'glpi_plugin_itsmmigrator_maps', 'WHERE' => ['id' => (int) $victim['id']]])->current();
+chk('a half-made form of a dead run is removed and made again: still 2 forms, none doubled, item ok', count($forms()) === 2 && (string) $nowRow['status'] === 'ok' && (int) $nowRow['items_id'] > 0 && $count('glpi_forms_forms', ['id' => $oldId]) === 0, 'forms=' . count($forms()));
+chk('and it has all its questions again', $count('glpi_forms_questions', ['forms_sections_id' => array_column(iterator_to_array($DB->request(['SELECT' => ['id'], 'FROM' => 'glpi_forms_sections', 'WHERE' => ['forms_forms_id' => (int) $nowRow['items_id']]]), false), 'id')]) === 8);
+\GlpiPlugin\Itsmmigrator\Catalog\CatalogImporter::forget($prep['token']);
+chk('the kept catalog file is removed at the end', \GlpiPlugin\Itsmmigrator\Catalog\CatalogImporter::load($prep['token']) === null);
+
 // ---- cleanup (only what this tool made)
 AdapterFactory::setOverride(null);
 foreach ($forms() as $x) { (new \Glpi\Form\Form())->delete(['id' => (int) $x['id']], true); }
