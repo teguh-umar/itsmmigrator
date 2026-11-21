@@ -39,8 +39,8 @@ if (!Session::haveRight(RightDefinition::RUN, UPDATE)) {
 }
 
 $action = (string) ($_POST['action'] ?? '');
-$src    = new Source();
-if ((int) ($_POST['sources_id'] ?? 0) <= 0 || !$src->getFromDB((int) $_POST['sources_id'])) {
+$src    = Source::accessible((int) ($_POST['sources_id'] ?? 0));
+if ($src === null) {
     $reply(404, ['success' => false, 'message' => 'No such source']);
 }
 if ($src->apiKey() === '') {

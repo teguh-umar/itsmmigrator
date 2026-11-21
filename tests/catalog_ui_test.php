@@ -24,4 +24,12 @@ check('the Form id is written to the map row at once, and a half-made Form of a 
 check('forms are never flagged is_draft (GLPI hides and purges those)', str_contains($imp, "'is_active' => 0, 'is_draft' => 0") && !str_contains($imp, "'is_draft' => 1"));
 check('the console command uses the same class, so both ways behave the same', str_contains($cli, 'CatalogImporter::process('));
 
+$srcFile = (string) file_get_contents(ITSM_ROOT . '/src/Source.php');
+$web = (string) file_get_contents(ITSM_ROOT . '/src/WebRun.php');
+$cat = (string) file_get_contents(ITSM_ROOT . '/src/CategoryListing.php');
+check('one shared guard: the source must exist and its target entity must be reachable (hub entity rule 6)', substr_count($srcFile, 'function accessible(') === 1 && str_contains($srcFile, 'public static function accessible(int $id): ?self') && str_contains($srcFile, "haveAccessToEntity((int) \$src->fields['entities_id'])"));
+check('the guard does not use can(): on a Source that is the configuration right, which a run-only user lacks', !preg_match('/function accessible.*?\n    }\n/s', $srcFile, $mm) || !str_contains($mm[0], '->can('));
+check('every endpoint that takes a sources_id uses the guard: catalog, run (WebRun::start) and the category list', str_contains($ajx, 'Source::accessible(') && str_contains($web, 'Source::accessible($sourcesId)') && str_contains($cat, 'Source::accessible($sourcesId)'));
+check('each endpoint still checks its own right first (run right, configuration right for the categories)', str_contains($ajx, 'RightDefinition::RUN, UPDATE') && str_contains((string) file_get_contents(ITSM_ROOT . '/ajax/run.php'), 'RightDefinition::RUN, UPDATE') && str_contains((string) file_get_contents(ITSM_ROOT . '/ajax/categories.php'), 'RightDefinition::CONFIG, UPDATE'));
+
 done();

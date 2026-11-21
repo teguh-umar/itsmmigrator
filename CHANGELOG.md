@@ -1,4 +1,9 @@
 # Changelog
+## 0.1.0-rc29
+
+- **A `sources_id` from a request is now access-checked in every endpoint** (hub entity rule 6, orchestrator finding on rc28). One shared guard, `Source::accessible($id)`: the source must exist and its target entity must be reachable by the signed-in user; otherwise the endpoint answers "unknown source" (it never says which). Used by `ajax/catalog.php`, the Run page (`WebRun::start`, which already checked the entity but not through the guard) and the category list (`ajax/categories.php` through `CategoryListing`). Each endpoint still checks its own right first (the run right for a run and the catalog, the configuration right for the categories). The guard deliberately does not call `can()`: on a Source that means the configuration right, which a user who may only run does not have, and it would have locked that user out of the Run page.
+- **Tests.** catalog_ui_test 17. Offline suite OK.
+
 ## 0.1.0-rc28
 
 - **Fix in the catalog import (rc27): the per-source lock.** rc27 took the database lock with the query builder, which refuses a query with no table ("Missing table name"), so every real (non-dry) import batch would have stopped at once, on the Run page and in the console. The lock is now taken and released with plain `GET_LOCK` / `RELEASE_LOCK` statements. Found by tools/staging_integration_m18.php (batch checks) before any use; the dry run and the earlier imports were not affected. rc27 was never pushed and should not be used.

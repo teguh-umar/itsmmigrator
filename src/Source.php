@@ -285,6 +285,23 @@ class Source extends CommonDBTM
         return $this->refuse(self::errors($input, $this->fields, $others)) ? false : self::prepare($input, self::encrypter(), $this->fields);
     }
 
+    /**
+     * The source an id from a request points at, only when the signed-in user may reach its target entity (hub entity
+     * rule 6: an id that comes from a request is always access-checked). The caller has already checked the right it
+     * needs (the run right for a run or the catalog, the configuration right for the category list): `can()` is not
+     * used here because on a Source it means the CONFIGURATION right, which a user who may only run does not have.
+     * Null when the source does not exist or its entity is out of reach, so a caller answers "unknown source" and never
+     * says which.
+     */
+    public static function accessible(int $id): ?self
+    {
+        $src = new self();
+        if ($id <= 0 || !$src->getFromDB($id)) {
+            return null;
+        }
+        return \Session::haveAccessToEntity((int) $src->fields['entities_id']) ? $src : null;
+    }
+
     /** The only place a stored key is decrypted. */
     public function apiKey(): string
     {

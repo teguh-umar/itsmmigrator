@@ -61,8 +61,8 @@ final class WebRun
      */
     public static function start(int $sourcesId, array $modules, array $rawFlags): array
     {
-        $source = new Source();
-        if (!$source->getFromDB($sourcesId)) {
+        $source = Source::accessible($sourcesId);
+        if ($source === null) {
             return ['success' => false, 'message' => __('Unknown source.', 'itsmmigrator')];
         }
         if ((int) $source->fields['is_active'] !== 1) {

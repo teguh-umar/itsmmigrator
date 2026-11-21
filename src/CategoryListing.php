@@ -35,8 +35,8 @@ final class CategoryListing
     /** @return array{success: bool, message?: string, paths?: list<string>, truncated?: bool} */
     public static function forSource(int $sourcesId): array
     {
-        $source = new Source();
-        if (!$source->getFromDB($sourcesId)) {
+        $source = Source::accessible($sourcesId);
+        if ($source === null) {
             return ['success' => false, 'message' => __('Unknown source.', 'itsmmigrator')];
         }
         if ($source->apiKey() === '') {
