@@ -239,6 +239,11 @@ final class TicketWriter
         $category  = UserRef::category($t->source, $t->categoryPath);
 
         $content = $t->content !== '' ? $t->content : '(no description)';
+        $bounce  = BounceCleaner::clean($content);
+        if ($bounce !== null) {
+            $content = $bounce;
+            $ctx->counters->detail('bounce', 'ticket_cleaned');
+        }
         if ($t->requesterSrcId !== null && $t->requesterSrcId !== '' && UserRef::resolve($t->source, $t->requesterSrcId, $ctx, false) === 0) {
             $content = self::requesterLine($this->adapterRef?->describeUser($t->requesterSrcId)) . $content;
         }
@@ -397,7 +402,7 @@ final class TicketWriter
                 $id = (int) (new \ITILFollowup())->add([
                     'itemtype'      => 'Ticket',
                     'items_id'      => $ticketId,
-                    'content'       => $n->body !== '' ? $n->body : '(empty)',
+                    'content'       => $n->body !== '' ? (BounceCleaner::clean($n->body) ?? $n->body) : '(empty)',
                     'is_private'    => $n->isPrivate ? 1 : 0,
                     'users_id'      => 0,
                     'date'          => $date,

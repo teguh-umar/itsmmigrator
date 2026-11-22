@@ -1,4 +1,10 @@
 # Changelog
+## 0.1.0-rc34
+
+- **Mail-bounce notices are cleaned, not stored whole.** A source that stores a "Delivery has failed to these recipients" notice as the body of a ticket or a note often carries tens of kilobytes of diagnostic data and a headers block. The importer now cuts the body at "Diagnostic information for administrators" (or at "Original message headers" when that line is absent): the requester line, the original message From/To/Date/Subject, the failure statement and its reason stay; the diagnostic data, the headers block and the "CAUTION:" banner go, and a short italic note says so. Nothing is skipped or deleted, the ticket and the note are still imported. A body that only mentions "headers", or has no cut line, is left alone; a cleaned body is never cleaned twice. Counted as `bounce.ticket_cleaned`.
+- **`plugins:itsmmigrator:clean-bounces --entity=<id> --username=<login>` for what is already imported** (tickets and their notes in one entity). `--dry-run` counts only; a real run needs `--backup=<file>`, a JSON file with the original bodies that must be kept OUTSIDE the repository (it holds real names and addresses). Counts only in its output.
+- **Tests.** bounce_cleaner_test 12. Offline suite OK.
+
 ## 0.1.0-rc33
 
 - **Import rule: a ticket already in GLPI follows its source status forward.** When a ticket that was imported earlier comes back from the source (it was updated there), its GLPI status now moves forward to the mapped source status: New / Assigned / Planned / Pending -> Approval -> Solved -> Closed. It moves only while the GLPI ticket is still open or pending, never backwards, never reopens a Solved or Closed ticket, and is skipped (counted `kept_edited_in_glpi`) when the GLPI ticket was edited after the source's last update. Each move leaves one private followup ("Status moved forward by the importer: Pending -> Solved (source status: Resolved)"). A dry run counts `would_advance` and writes nothing. Counted under `status`: advanced / would_advance / kept_edited_in_glpi.
