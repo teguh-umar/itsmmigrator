@@ -16,7 +16,7 @@ function plugin_version_itsmmigrator()
     return [
         'name'         => 'ITSM Migrator',
         'version'      => PLUGIN_ITSMMIGRATOR_VERSION,
-        'author'       => 'ICT',
+        'author'       => 'Teguh DHAMAR',
         'license'      => 'GPL-3.0-or-later',
         'homepage'     => '',
         'requirements' => [
