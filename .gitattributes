@@ -2,3 +2,10 @@ lib/pgnsuite/*.php -text
 front/pgnsuite.settings.php -text
 tests/ export-ignore
 tools/ export-ignore
+
+# Suite governance files (CHARTER.md): kept in the repository, not shipped in the plugin zip.
+# LICENSE and NOTICE stay in the zip.
+AGENTS.md export-ignore
+CHARTER.md export-ignore -text
+CITATION.cff export-ignore
+SECURITY.md export-ignore -text

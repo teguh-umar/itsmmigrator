@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you reuse this software, please cite it as below."
+title: "ITSM Migrator"
+type: software
+abstract: "Brings data from an external ITSM tool (Freshservice, ServiceDesk Plus) into GLPI, with GLPI staying the single source of truth."
+authors:
+  - given-names: Teguh
+    family-names: DHAMAR
+repository-code: "https://github.com/teguh-umar/itsmmigrator"
+license: GPL-3.0-or-later
+version: "0.1.0-rc35"
+date-released: "2026-11-22"
+keywords:
+  - glpi
+  - glpi-plugin
+  - itsm
+  - migration
