@@ -12,6 +12,7 @@ use GlpiPlugin\Itsmmigrator\Adapter\Dto\TicketChildren;
 use GlpiPlugin\Itsmmigrator\Adapter\ClientException;
 use GlpiPlugin\Itsmmigrator\Adapter\SourceAdapterInterface;
 use GlpiPlugin\Itsmmigrator\AttachmentRule;
+use GlpiPlugin\Itsmmigrator\BounceCleaner;
 use GlpiPlugin\Itsmmigrator\CategoryFilter;
 use GlpiPlugin\Itsmmigrator\Context;
 use GlpiPlugin\Itsmmigrator\MapRepository;

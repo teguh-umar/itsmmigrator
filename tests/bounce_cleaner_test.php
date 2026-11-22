@@ -33,4 +33,11 @@ check('a mail that only mentions headers, without a failure notice, is left alon
 check('empty body', B::clean('') === null && !B::isBounce(''));
 check('a failure notice without a cut line is left alone (nothing to cut)', B::clean('<p>Undeliverable: the mailbox is full.</p>') === null);
 
+// the importer must be able to resolve the class (rc34 shipped without this import: every new ticket failed)
+$w = (string) file_get_contents(ITSM_ROOT . '/src/Writer/TicketWriter.php');
+check('TicketWriter imports BounceCleaner (it lives in another namespace)', str_contains($w, "use GlpiPlugin\\Itsmmigrator\\BounceCleaner;"));
+check('TicketWriter cleans the ticket body and the note body', str_contains($w, 'BounceCleaner::clean($content)') && str_contains($w, 'BounceCleaner::clean($n->body)'));
+$c = (string) file_get_contents(ITSM_ROOT . '/src/Console/CleanBouncesCommand.php');
+check('the command imports BounceCleaner and refuses a real run without --backup', str_contains($c, "use GlpiPlugin\\Itsmmigrator\\BounceCleaner;") && str_contains($c, '--backup is required'));
+
 done();
