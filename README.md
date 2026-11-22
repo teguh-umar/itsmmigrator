@@ -82,3 +82,42 @@ The offline suites need the `mbstring` extension. The staging tools create throw
 ## Documentation
 
 The user manual is written by Copilot (hub §0 rule 9). The step-by-step deployment is `docs/runbook-v0.1.0-rc35.md`.
+
+## Rights
+
+| Right | Name in the profile |
+|---|---|
+| `plugin_itsmmigrator_config` | see **Administration > Profiles**, tab of this plugin |
+| `plugin_itsmmigrator_run` | see **Administration > Profiles**, tab of this plugin |
+
+Users only see rows of the entities they can access.
+
+## Automatic actions
+
+| Action | Default frequency |
+|---|---|
+| `SdpSync` | weekly |
+
+They can be switched off or rescheduled in **Setup > Automatic actions**.
+
+## Data it stores
+
+`glpi_plugin_itsmmigrator_maps`, `glpi_plugin_itsmmigrator_runs`, `glpi_plugin_itsmmigrator_sources`.
+
+Uninstall removes these tables, with the plugin's rights, automatic actions and settings.
+
+## Security
+
+- Every form uses GLPI's CSRF token, and every page checks the plugin's rights and the user's entities.
+- Secrets such as API keys are stored with GLPI's secured configuration, sent once and never shown again.
+- Calls to outside services run only from automatic actions or an explicit button, with a timeout.
+- Report a vulnerability privately as described in [SECURITY.md](SECURITY.md).
+
+## Contributing
+
+Rules for contributors: [CHARTER.md](CHARTER.md) and [AGENTS.md](AGENTS.md).
+
+## Licence
+
+GPL-3.0-or-later, author Teguh DHAMAR. See [LICENSE](LICENSE) and [NOTICE](NOTICE). To cite this plugin, see
+[CITATION.cff](CITATION.cff).
