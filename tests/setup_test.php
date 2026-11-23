@@ -2,7 +2,7 @@
 
 require __DIR__ . '/bootstrap.php';
 
-// Claimed values (hub §2): menu 85, PGN Suite tab 85, no AssetTab.
+// Claimed values (hub §2): menu 85, ICT Tools tab 85, no AssetTab.
 $setup = file_get_contents(ITSM_ROOT . '/setup.php');
 check('version is an rc', preg_match("/'PLUGIN_ITSMMIGRATOR_VERSION', '\\d+\\.\\d+\\.\\d+-rc\\d+'/", $setup) === 1);
 check('GLPI range 11.0.0 - 11.0.99', str_contains($setup, "'11.0.0'") && str_contains($setup, "'11.0.99'"));
@@ -14,7 +14,7 @@ check('Profile rights tab registered', str_contains($setup, 'Profile::class'));
 $menu = file_get_contents(ITSM_ROOT . '/src/Menu.php');
 check('menu order 85', str_contains($menu, 'ORDER = 85'));
 $cfg = file_get_contents(ITSM_ROOT . '/src/SuiteConfig.php');
-check('PGN Suite tab order 85', str_contains($cfg, 'ORDER = 85'));
+check('ICT Tools tab order 85', str_contains($cfg, 'ORDER = 85'));
 
 $cron = file_get_contents(ITSM_ROOT . '/src/Cron/SyncTask.php');
 check('cron task is SdpSync with a cronSdpSync method', str_contains($cron, "TASK = 'SdpSync'") && str_contains($cron, 'function cronSdpSync'));

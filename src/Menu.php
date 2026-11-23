@@ -5,7 +5,7 @@ namespace GlpiPlugin\Itsmmigrator;
 use Session;
 
 /**
- * This plugin's entry in the shared PGN Suite sidebar sector (hub §5).
+ * This plugin's entry in the shared ICT Tools sidebar sector (hub §5).
  * Registered in setup.php as the string 'GlpiPlugin\Itsmmigrator\Menu::entry'.
  * Order 85 is the slot allocated to this plugin by the suite orchestrator.
  */

@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Itsmmigrator (ITSM Migrator) - external ITSM data into GLPI 11 (PGN GLPI Suite plugin)
+ * Itsmmigrator (ITSM Migrator) - external ITSM data into GLPI 11 (GLPI plugin suite plugin)
  *
  * @author  ICT
  * @license GPL-3.0-or-later
