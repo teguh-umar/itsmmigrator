@@ -8,8 +8,8 @@ authors:
     family-names: DHAMAR
 repository-code: "https://github.com/teguh-umar/itsmmigrator"
 license: GPL-3.0-or-later
-version: "0.1.0-rc35"
-date-released: "2026-11-22"
+version: "0.1.0-rc36"
+date-released: "2026-11-23"
 keywords:
   - glpi
   - glpi-plugin

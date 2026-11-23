@@ -1,4 +1,10 @@
 # Changelog
+## 0.1.0-rc36
+
+- **Plugin author shown in GLPI is now Teguh DHAMAR** (it was set in `setup.php` after rc35; this build is the first zip that carries it).
+- **Repository governance files** (CHARTER, AGENTS, CITATION, SECURITY) are kept in the repository and left out of the zip; LICENSE and NOTICE ship in it.
+- No change to the importer, the commands or the data. The offline suite is unchanged.
+
 ## 0.1.0-rc35
 
 - **Mail-bounce notices are cleaned, not stored whole.** A source that stores a "Delivery has failed to these recipients" notice as the body of a ticket or a note often carries tens of kilobytes of diagnostic data and a headers block. The importer now cuts the body at "Diagnostic information for administrators" (or at "Original message headers" when that line is absent): the requester line, the original message From/To/Date/Subject, the failure statement and its reason stay; the diagnostic data, the headers block and the "CAUTION:" banner go, and a short italic note says so. Nothing is skipped or deleted, the ticket and the note are still imported. A body that only mentions "headers", or has no cut line, is left alone; a cleaned body is never cleaned twice. Counted as `bounce.ticket_cleaned`.

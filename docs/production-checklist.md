@@ -1,6 +1,6 @@
 # Production checklist: itsmmigrator (ITSM Migrator)
 
-A short, ordered checklist for the first real import into a production GLPI. It adds to `docs/runbook-v0.1.0-rc35.md` (install, source form, dry runs); read that first. This page covers what was learned on a staging instance and is easy to forget on the real one.
+A short, ordered checklist for the first real import into a production GLPI. It adds to `docs/runbook-v0.1.0-rc36.md` (install, source form, dry runs); read that first. This page covers what was learned on a staging instance and is easy to forget on the real one.
 
 Replace `<glpi>`, `<webuser>`, `<id>` (source id), `<login>` (a GLPI login with rights on the target entity) and `<entity>` with your own values. Keep every file that holds real names, addresses or ticket text (CSV exports, backups, logs) **outside** the repository.
 
